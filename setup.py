@@ -18,7 +18,7 @@ install_requires = [
     "h5py==3.15.1",
     "rapidfuzz==3.14.3",
     "Pillow==12.1.0",
-    "pytest==9.0.2",
+    "pystray==0.19.5",
 ]
 
 # Define OS-specific dependencies
@@ -28,6 +28,9 @@ extras_require = {
     "linux": [],
     "python-doctr": [
         "python-doctr @ git+https://github.com/koenvaneijk/doctr.git@af711bc04eb8876a7189923fb51ec44481ee18cd"
+    ],
+    "dev": [
+        "pytest==9.0.2",
     ],
 }
 
