@@ -117,15 +117,28 @@ OpenRecall is released under the [AGPLv3](https://opensource.org/licenses/AGPL-3
 
 
 To install:
-python3 -m pip install .
 
+```bash
+python3 -m pip install .
+```
+
+Or to include tests locally:
+
+```bash
+python3 -m pip install ".[dev]"
+```
 
 To run:
-```
+
+```bash
 python3 -m openrecall.app
 ```
+
 Open your browser to:
 [http://localhost:8082](http://localhost:8082) to access OpenRecall.
 
 Run Tests:
+
+```bash
 python3 -m pytest tests
+```

@@ -14,6 +14,7 @@ from openrecall.database import (
 )
 from openrecall.nlp import cosine_similarity, get_embedding
 from openrecall.screenshot import record_screenshots_thread
+from openrecall.trayapp import start_tray_icon_async, start_tray_icon_blocking
 from openrecall.utils import human_readable_time, timestamp_to_human_readable
 
 app = Flask(__name__)
@@ -226,7 +227,12 @@ if __name__ == "__main__":
     print(f"Appdata folder: {appdata_folder}")
 
     # Start the thread to record screenshots
-    t = Thread(target=record_screenshots_thread)
+    t = Thread(target=record_screenshots_thread, daemon=True)
     t.start()
 
-    app.run(port=8082)
+    # Run Flask in a background thread so we can keep the tray icon on the main thread
+    web_thread = Thread(target=app.run, kwargs={"port": 8082}, daemon=True)
+    web_thread.start()
+
+    # Start tray icon in the main thread (more reliable on macOS)
+    start_tray_icon_blocking()
