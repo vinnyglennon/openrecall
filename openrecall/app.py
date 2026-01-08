@@ -1,11 +1,17 @@
 from threading import Thread
 
+from datetime import datetime
 import numpy as np
 from flask import Flask, render_template_string, request, send_from_directory
 from jinja2 import BaseLoader
 
 from openrecall.config import appdata_folder, screenshots_path
-from openrecall.database import create_db, get_all_entries, get_timestamps
+from openrecall.database import (
+    create_db,
+    get_all_entries,
+    get_timestamps,
+    get_entries_by_time_range,
+)
 from openrecall.nlp import cosine_similarity, get_embedding
 from openrecall.screenshot import record_screenshots_thread
 from openrecall.utils import human_readable_time, timestamp_to_human_readable
@@ -52,11 +58,21 @@ base_template = """
 <body>
 <nav class="navbar navbar-light bg-light">
   <div class="container">
-    <form class="form-inline my-2 my-lg-0 w-100 d-flex" action="/search" method="get">
-      <input class="form-control flex-grow-1 mr-sm-2" type="search" name="q" placeholder="Search" aria-label="Search">
-      <button class="btn btn-outline-secondary my-2 my-sm-0" type="submit">
-        <i class="bi bi-search"></i>
-      </button>
+    <form class="form-inline my-2 my-lg-0 w-100 d-flex justify-content-between" action="/search" method="get">
+        <div class="form-group">
+            <input type="text" class="form-control" name="q" placeholder="Search" value="{{ request.args.get('q', '') }}">
+        </div>
+        <div class="form-group mx-sm-3">
+            <label for="start_time" class="mr-2">Start Time (required)</label>
+            <input type="datetime-local" class="form-control" name="start_time" required value="{{ request.args.get('start_time', '') }}">
+        </div>
+        <div class="form-group mx-sm-3">
+            <label for="end_time" class="mr-2">End Time</label>
+            <input type="datetime-local" class="form-control" name="end_time" value="{{ request.args.get('end_time', '') }}">
+        </div>
+        <button class="btn btn-outline-secondary my-2 my-sm-0" type="submit">
+            <i class="bi bi-search"></i>
+        </button>
     </form>
   </div>
 </nav>
@@ -68,7 +84,6 @@ base_template = """
   <script src="https://code.jquery.com/jquery-3.5.1.slim.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@popperjs/core@2.5.3/dist/umd/popper.min.js"></script>
   <script src="https://stackpath.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
-  
 </body>
 </html>
 """
@@ -136,13 +151,37 @@ def timeline():
 @app.route("/search")
 def search():
     q = request.args.get("q")
+    start_time_str = request.args.get("start_time")
+    end_time_str = request.args.get("end_time")
+
     entries = get_all_entries()
-    # Embeddings are stored as float32 bytes; load with matching dtype to avoid shape mismatches
-    embeddings = [np.frombuffer(entry.embedding, dtype=np.float32) for entry in entries]
+
+    if start_time_str:
+        start_time = int(
+            datetime.strptime(start_time_str, "%Y-%m-%dT%H:%M").timestamp()
+        )
+        if end_time_str:
+            end_time = int(datetime.strptime(end_time_str, "%Y-%m-%dT%H:%M").timestamp())
+        else:
+            end_time = int(datetime.now().timestamp())
+        entries = get_entries_by_time_range(start_time, end_time)
+
     query_embedding = get_embedding(q)
-    similarities = [cosine_similarity(query_embedding, emb) for emb in embeddings]
-    indices = np.argsort(similarities)[::-1]
-    sorted_entries = [entries[i] for i in indices]
+    query_dim = query_embedding.shape[0]
+
+    filtered = []
+    for entry in entries:
+        emb = np.frombuffer(entry.embedding, dtype=np.float32)
+        if emb.shape[0] != query_dim:
+            continue
+        filtered.append((entry, emb))
+
+    if not filtered:
+        sorted_entries = []
+    else:
+        similarities = [cosine_similarity(query_embedding, emb) for _, emb in filtered]
+        indices = np.argsort(similarities)[::-1]
+        sorted_entries = [filtered[i][0] for i in indices]
 
     return render_template_string(
         """

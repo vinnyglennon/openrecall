@@ -121,13 +121,15 @@ def insert_entry(
                 (text, timestamp, embedding_bytes, app, title),
             )
             conn.commit()
-            if cursor.rowcount > 0: # Check if insert actually happened
-                last_row_id = cursor.lastrowid
-            # else:
-                # Optionally log that a duplicate timestamp was encountered
-                # print(f"Skipped inserting entry with duplicate timestamp: {timestamp}")
+    except sqlite3.OperationalError as e:
+        print("Error inserting entry:", e)
 
-    except sqlite3.Error as e:
-        # More specific error handling can be added (e.g., IntegrityError for UNIQUE constraint)
-        print(f"Database error during insertion: {e}")
-    return last_row_id
+
+def get_entries_by_time_range(start_time: int, end_time: int) -> List[Entry]:
+    with sqlite3.connect(db_path) as conn:
+        c = conn.cursor()
+        results = c.execute(
+            "SELECT * FROM entries WHERE timestamp BETWEEN ? AND ? ORDER BY timestamp DESC",
+            (start_time, end_time),
+        ).fetchall()
+        return [Entry(*result) for result in results]
