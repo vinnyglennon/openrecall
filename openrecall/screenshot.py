@@ -6,7 +6,8 @@ import mss
 import numpy as np
 from PIL import Image
 
-from openrecall.config import screenshots_path, args
+from openrecall import state
+from openrecall.config import args, screenshots_path
 from openrecall.database import insert_entry
 from openrecall.nlp import get_embedding
 from openrecall.ocr import extract_text_from_image
@@ -123,6 +124,10 @@ def record_screenshots_thread() -> None:
     last_screenshots: List[np.ndarray] = take_screenshots()
 
     while True:
+        if state.is_paused():
+            time.sleep(3)
+            continue
+
         if not is_user_active():
             time.sleep(3)  # Wait longer if user is inactive
             continue
