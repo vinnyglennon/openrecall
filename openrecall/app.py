@@ -63,8 +63,8 @@ base_template = """
             <input type="text" class="form-control" name="q" placeholder="Search" value="{{ request.args.get('q', '') }}">
         </div>
         <div class="form-group mx-sm-3">
-            <label for="start_time" class="mr-2">Start Time</label>
-            <input type="datetime-local" class="form-control" name="start_time" value="{{ request.args.get('start_time', '') }}">
+            <label for="start_time" class="mr-2">Start Time (required)</label>
+            <input type="datetime-local" class="form-control" name="start_time" required value="{{ request.args.get('start_time', '') }}">
         </div>
         <div class="form-group mx-sm-3">
             <label for="end_time" class="mr-2">End Time</label>
@@ -154,22 +154,34 @@ def search():
     start_time_str = request.args.get("start_time")
     end_time_str = request.args.get("end_time")
 
-    if start_time_str and end_time_str:
+    entries = get_all_entries()
+
+    if start_time_str:
         start_time = int(
             datetime.strptime(start_time_str, "%Y-%m-%dT%H:%M").timestamp()
         )
-        end_time = int(datetime.strptime(end_time_str, "%Y-%m-%dT%H:%M").timestamp())
+        if end_time_str:
+            end_time = int(datetime.strptime(end_time_str, "%Y-%m-%dT%H:%M").timestamp())
+        else:
+            end_time = int(datetime.now().timestamp())
         entries = get_entries_by_time_range(start_time, end_time)
-    else:
-        entries = get_all_entries()
 
-    embeddings = [
-        np.frombuffer(entry.embedding, dtype=np.float64) for entry in entries
-    ]
     query_embedding = get_embedding(q)
-    similarities = [cosine_similarity(query_embedding, emb) for emb in embeddings]
-    indices = np.argsort(similarities)[::-1]
-    sorted_entries = [entries[i] for i in indices]
+    query_dim = query_embedding.shape[0]
+
+    filtered = []
+    for entry in entries:
+        emb = np.frombuffer(entry.embedding, dtype=np.float32)
+        if emb.shape[0] != query_dim:
+            continue
+        filtered.append((entry, emb))
+
+    if not filtered:
+        sorted_entries = []
+    else:
+        similarities = [cosine_similarity(query_embedding, emb) for _, emb in filtered]
+        indices = np.argsort(similarities)[::-1]
+        sorted_entries = [filtered[i][0] for i in indices]
 
     return render_template_string(
         """
