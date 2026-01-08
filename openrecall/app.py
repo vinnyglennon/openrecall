@@ -137,7 +137,8 @@ def timeline():
 def search():
     q = request.args.get("q")
     entries = get_all_entries()
-    embeddings = [np.frombuffer(entry.embedding, dtype=np.float64) for entry in entries]
+    # Embeddings are stored as float32 bytes; load with matching dtype to avoid shape mismatches
+    embeddings = [np.frombuffer(entry.embedding, dtype=np.float32) for entry in entries]
     query_embedding = get_embedding(q)
     similarities = [cosine_similarity(query_embedding, emb) for emb in embeddings]
     indices = np.argsort(similarities)[::-1]
