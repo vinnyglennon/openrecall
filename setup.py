@@ -8,16 +8,16 @@ with io.open("README.md", "r", encoding="utf-8") as f:
     long_description = f.read()
 
 install_requires = [
-    "Flask==3.0.3",
+    "Flask==3.1.2",
     "numpy==1.26.4",
-    "mss==9.0.1",
-    "sentence-transformers==3.0.0",
-    "torch==2.8.0",
-    "torchvision==0.17.0",
-    "shapely==2.0.4",
-    "h5py==3.11.0",
-    "rapidfuzz==3.9.3",
-    "Pillow==10.3.0",
+    "mss==10.1.0",
+    "sentence-transformers==5.2.0",
+    "torch==2.9.1",
+    "torchvision==0.24.1",
+    "shapely==2.1.2",
+    "h5py==3.15.1",
+    "rapidfuzz==3.14.3",
+    "Pillow==12.1.0",
 ]
 
 # Define OS-specific dependencies
@@ -49,7 +49,7 @@ install_requires.extend(extras_require.get("python-doctr", []))
 
 setup(
     name="OpenRecall",
-    version="0.8",
+    version="0.8.1",
     packages=find_packages(),
     install_requires=install_requires,
     long_description=long_description,
