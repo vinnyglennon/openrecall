@@ -121,8 +121,11 @@ def insert_entry(
                 (text, timestamp, embedding_bytes, app, title),
             )
             conn.commit()
+            if cursor.rowcount > 0:
+                last_row_id = cursor.lastrowid
     except sqlite3.OperationalError as e:
         print("Error inserting entry:", e)
+    return last_row_id
 
 
 def get_entries_by_time_range(start_time: int, end_time: int) -> List[Entry]:

@@ -75,12 +75,6 @@ To install:
 python3 -m pip install --upgrade --no-cache-dir git+https://github.com/openrecall/openrecall.git
 ```
 
-To run:
-```
-python3 -m openrecall.app
-```
-Open your browser to:
-[http://localhost:8082](http://localhost:8082) to access OpenRecall.
 
 ## Arguments
 `--storage-path` (default: user data path for your OS): allows you to specify the path where the screenshots and database should be stored. We recommend [creating an encrypted volume](docs/encryption.md) to store your data.
@@ -116,10 +110,22 @@ Note: If you specified a custom storage path at any time using the `--storage-pa
 
 As an open-source project, we welcome contributions from the community. If you'd like to help improve OpenRecall, please submit a pull request or open an issue on our GitHub repository.
 
-## Contact the maintainers
-mail@datatalk.be
-
 ## License
 
 OpenRecall is released under the [AGPLv3](https://opensource.org/licenses/AGPL-3.0), ensuring that it remains open and accessible to everyone.
 
+
+
+To install:
+python3 -m pip install .
+
+
+To run:
+```
+python3 -m openrecall.app
+```
+Open your browser to:
+[http://localhost:8082](http://localhost:8082) to access OpenRecall.
+
+Run Tests:
+python3 -m pytest tests

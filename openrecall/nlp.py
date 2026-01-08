@@ -76,8 +76,8 @@ def cosine_similarity(a: np.ndarray, b: np.ndarray) -> float:
     norm_b = np.linalg.norm(b)
 
     if norm_a == 0 or norm_b == 0:
-        logger.warning("One or both vectors have zero magnitude. Returning 0 similarity.")
-        return 0.0
+        logger.warning("One or both vectors have zero magnitude. Returning NaN.")
+        return float("nan")
 
     similarity = np.dot(a, b) / (norm_a * norm_b)
     # Clip values to handle potential floating-point inaccuracies slightly outside [-1, 1]

@@ -18,6 +18,7 @@ install_requires = [
     "h5py==3.15.1",
     "rapidfuzz==3.14.3",
     "Pillow==12.1.0",
+    "pytest==9.0.2",
 ]
 
 # Define OS-specific dependencies

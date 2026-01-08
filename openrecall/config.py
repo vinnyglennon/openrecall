@@ -3,13 +3,11 @@ import sys
 import argparse
 
 parser = argparse.ArgumentParser(description="OpenRecall")
-
 parser.add_argument(
     "--storage-path",
     default=None,
     help="Path to store the screenshots and database",
 )
-
 parser.add_argument(
     "--primary-monitor-only",
     action="store_true",
@@ -17,7 +15,16 @@ parser.add_argument(
     default=False,
 )
 
-args = parser.parse_args()
+
+_parsed_args = None
+
+
+def get_args():
+    global _parsed_args
+    if _parsed_args is None:
+        # parse known args to avoid pytest args blowing up import
+        _parsed_args, _ = parser.parse_known_args()
+    return _parsed_args
 
 
 def get_appdata_folder(app_name="openrecall"):
@@ -36,6 +43,8 @@ def get_appdata_folder(app_name="openrecall"):
         os.makedirs(path)
     return path
 
+
+args = get_args()
 
 if args.storage_path:
     appdata_folder = args.storage_path
