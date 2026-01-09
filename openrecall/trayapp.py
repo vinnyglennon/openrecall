@@ -25,7 +25,9 @@ if platform.system().lower() == "darwin":
         logger.warning("Failed to load macOS settings panel: %s", exc)
 
 ICON_FILENAME = "lookback-icon.png"
-ICON_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "images", ICON_FILENAME))
+ICON_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "..", "images", ICON_FILENAME)
+)
 
 
 def _load_icon() -> Optional[Image.Image]:
@@ -148,7 +150,13 @@ def _get_running_apps() -> list[str]:
     try:
         output = subprocess.check_output(["ps", "-axo", "comm"], text=True)
         # dedupe and clean empty lines
-        apps = sorted({line.strip().split("/")[-1] for line in output.splitlines() if line.strip()})
+        apps = sorted(
+            {
+                line.strip().split("/")[-1]
+                for line in output.splitlines()
+                if line.strip()
+            }
+        )
         return apps
     except Exception as exc:
         logger.warning("Failed to list running apps: %s", exc)
@@ -201,7 +209,9 @@ def _macos_settings_flow():
     )
 
     # Incognito toggle
-    incognito_default = "Do not record incognito" if settings.incognito_block else "Record all"
+    incognito_default = (
+        "Do not record incognito" if settings.incognito_block else "Record all"
+    )
     incognito_choice = _osascript(
         f'choose from list {{"Do not record incognito", "Record all"}} with prompt "Private browsing: skip incognito/private windows?" default items {{"{incognito_default}"}} with title "OpenRecall Settings"'
     )
@@ -211,9 +221,13 @@ def _macos_settings_flow():
     exclude_selection = None
     if running_apps:
         limited_apps = running_apps[:30]
-        apps_list = "{" + ", ".join(f'"{_escape_item(app)}"' for app in limited_apps) + "}"
+        apps_list = (
+            "{" + ", ".join(f'"{_escape_item(app)}"' for app in limited_apps) + "}"
+        )
         default_items = (
-            "{" + ", ".join(f'"{_escape_item(app)}"' for app in settings.whitelist or []) + "}"
+            "{"
+            + ", ".join(f'"{_escape_item(app)}"' for app in settings.whitelist or [])
+            + "}"
             if settings.whitelist
             else "{}"
         )
@@ -246,7 +260,9 @@ def _macos_settings_flow():
             os.makedirs(screenshots_path, exist_ok=True)
             # Recreate empty database/tables after deletion
             create_db()
-            _osascript('display dialog "All data deleted." buttons {"OK"} default button "OK" with title "OpenRecall Settings"')
+            _osascript(
+                'display dialog "All data deleted." buttons {"OK"} default button "OK" with title "OpenRecall Settings"'
+            )
             deleted = True
         except Exception as exc:
             logger.error("Failed to delete data: %s", exc)
@@ -271,7 +287,9 @@ def _open_settings(icon=None, item=None):
             logger.exception("Failed to open macOS settings panel: %s", exc)
         return
     elif platform.system().lower() == "darwin" and not present_settings_panel:
-        logger.warning("macOS settings panel not available (PyObjC not installed or import failed).")
+        logger.warning(
+            "macOS settings panel not available (PyObjC not installed or import failed)."
+        )
 
     # Fallback for other platforms: simple message
     logger.warning("Settings UI not implemented for this platform yet.")
@@ -289,7 +307,9 @@ def start_tray_icon_async():
         _tray_icon.run_detached()
         logger.info("Tray icon started.")
     except Exception:
-        logger.exception("Tray icon failed to start with run_detached; falling back to thread.")
+        logger.exception(
+            "Tray icon failed to start with run_detached; falling back to thread."
+        )
         threading.Thread(target=_tray_icon.run, daemon=True).start()
 
 

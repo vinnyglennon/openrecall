@@ -50,7 +50,9 @@ def get_embedding(text: str) -> np.ndarray:
     sentences = [line for line in text.split("\n") if line.strip()]
 
     if not sentences:
-        logger.warning("No non-empty lines found after splitting. Returning zero vector.")
+        logger.warning(
+            "No non-empty lines found after splitting. Returning zero vector."
+        )
         return np.zeros(EMBEDDING_DIM, dtype=np.float32)
 
     try:

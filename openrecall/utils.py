@@ -101,7 +101,11 @@ def get_active_window_title_osx() -> str:
     Returns:
         The title of the active window, or an empty string if unavailable.
     """
-    if CGWindowListCopyWindowInfo is None or kCGNullWindowID is None or kCGWindowListOptionOnScreenOnly is None:
+    if (
+        CGWindowListCopyWindowInfo is None
+        or kCGNullWindowID is None
+        or kCGWindowListOptionOnScreenOnly is None
+    ):
         return ""  # Indicate unavailability if import failed
     try:
         app_name = get_active_app_name_osx()
@@ -186,22 +190,26 @@ def get_active_app_name_linux() -> str:
         return ""
     try:
         # Get active window ID
-        active_window_cmd = ['xprop', '-root', '_NET_ACTIVE_WINDOW']
-        active_window_proc = subprocess.Popen(active_window_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        active_window_cmd = ["xprop", "-root", "_NET_ACTIVE_WINDOW"]
+        active_window_proc = subprocess.Popen(
+            active_window_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         stdout, stderr = active_window_proc.communicate(timeout=1)
         if active_window_proc.returncode != 0:
             print(f"Error running xprop for active window: {stderr.decode()}")
             return ""
 
-        match = re.search(rb'window id # (0x[0-9a-fA-F]+)', stdout)
+        match = re.search(rb"window id # (0x[0-9a-fA-F]+)", stdout)
         if not match:
             print("Could not find active window ID using xprop.")
             return ""
-        window_id = match.group(1).decode('utf-8')
+        window_id = match.group(1).decode("utf-8")
 
         # Get WM_CLASS for the window ID
-        wm_class_cmd = ['xprop', '-id', window_id, 'WM_CLASS']
-        wm_class_proc = subprocess.Popen(wm_class_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        wm_class_cmd = ["xprop", "-id", window_id, "WM_CLASS"]
+        wm_class_proc = subprocess.Popen(
+            wm_class_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         stdout, stderr = wm_class_proc.communicate(timeout=1)
         if wm_class_proc.returncode != 0:
             print(f"Error running xprop for WM_CLASS: {stderr.decode()}")
@@ -211,7 +219,7 @@ def get_active_app_name_linux() -> str:
         match = re.search(rb'WM_CLASS\(STRING\) = "([^"]+)"(?:, "([^"]+)")?', stdout)
         if match:
             # Return the instance name if available, otherwise the class name
-            instance = match.group(1).decode('utf-8')
+            instance = match.group(1).decode("utf-8")
             # class_name = match.group(2).decode('utf-8') if match.group(2) else None
             return instance
         else:
@@ -225,8 +233,8 @@ def get_active_app_name_linux() -> str:
         print("Error: 'xprop' command timed out.")
         return ""
     except Exception as e:
-         print(f"Error getting Linux app name: {e}")
-         return ""
+        print(f"Error getting Linux app name: {e}")
+        return ""
 
 
 def get_active_window_title_linux() -> str:
@@ -240,39 +248,49 @@ def get_active_window_title_linux() -> str:
         Requires 'xprop' utility.
     """
     if subprocess is None:
-        print("Warning: 'subprocess' module not available for Linux window title check.")
+        print(
+            "Warning: 'subprocess' module not available for Linux window title check."
+        )
         return ""
     try:
         # Get active window ID
-        active_window_cmd = ['xprop', '-root', '_NET_ACTIVE_WINDOW']
-        active_window_proc = subprocess.Popen(active_window_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        active_window_cmd = ["xprop", "-root", "_NET_ACTIVE_WINDOW"]
+        active_window_proc = subprocess.Popen(
+            active_window_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        )
         stdout, stderr = active_window_proc.communicate(timeout=1)
         if active_window_proc.returncode != 0:
             print(f"Error running xprop for active window: {stderr.decode()}")
             return ""
 
-        match = re.search(rb'window id # (0x[0-9a-fA-F]+)', stdout)
+        match = re.search(rb"window id # (0x[0-9a-fA-F]+)", stdout)
         if not match:
             print("Could not find active window ID using xprop.")
             return ""
-        window_id = match.group(1).decode('utf-8')
+        window_id = match.group(1).decode("utf-8")
 
         # Get _NET_WM_NAME (UTF-8 title) or WM_NAME (legacy title)
-        for prop_name in ['_NET_WM_NAME', 'WM_NAME']:
-            title_cmd = ['xprop', '-id', window_id, prop_name]
-            title_proc = subprocess.Popen(title_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        for prop_name in ["_NET_WM_NAME", "WM_NAME"]:
+            title_cmd = ["xprop", "-id", window_id, prop_name]
+            title_proc = subprocess.Popen(
+                title_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+            )
             stdout, stderr = title_proc.communicate(timeout=1)
 
             if title_proc.returncode == 0:
-                if prop_name == '_NET_WM_NAME':
+                if prop_name == "_NET_WM_NAME":
                     # _NET_WM_NAME(UTF8_STRING) = "Title"
-                    match = re.search(rb'_NET_WM_NAME\(UTF8_STRING\) = "([^"]*)"', stdout)
-                else: # WM_NAME
+                    match = re.search(
+                        rb'_NET_WM_NAME\(UTF8_STRING\) = "([^"]*)"', stdout
+                    )
+                else:  # WM_NAME
                     # WM_NAME(STRING) = "Title"
                     match = re.search(rb'WM_NAME\([^)]*\) = "([^"]*)"', stdout)
 
                 if match:
-                    title = match.group(1).decode('utf-8', errors='replace') # Decode UTF-8, replace errors
+                    title = match.group(1).decode(
+                        "utf-8", errors="replace"
+                    )  # Decode UTF-8, replace errors
                     return title
 
         # If neither property provided a title
@@ -288,7 +306,8 @@ def get_active_window_title_linux() -> str:
     except Exception as e:
         print(f"Error getting Linux window title: {e}")
         return ""
-    
+
+
 def get_active_app_name() -> str:
     """Gets the active application name for the current platform.
 
@@ -303,7 +322,9 @@ def get_active_app_name() -> str:
     elif sys.platform.startswith("linux"):
         return get_active_app_name_linux()
     else:
-        raise NotImplementedError(f"Platform '{sys.platform}' not supported yet for get_active_app_name")
+        raise NotImplementedError(
+            f"Platform '{sys.platform}' not supported yet for get_active_app_name"
+        )
 
 
 def get_active_window_title() -> str:
@@ -320,8 +341,12 @@ def get_active_window_title() -> str:
     elif sys.platform.startswith("linux"):
         return get_active_window_title_linux()
     else:
-        print("Warning: Active window title retrieval not implemented for this platform.")
-        raise NotImplementedError(f"Platform '{sys.platform}' not supported yet for get_active_window_title")
+        print(
+            "Warning: Active window title retrieval not implemented for this platform."
+        )
+        raise NotImplementedError(
+            f"Platform '{sys.platform}' not supported yet for get_active_window_title"
+        )
 
 
 def is_user_active_osx() -> bool:
@@ -412,25 +437,31 @@ def is_user_active_linux() -> bool:
     """
     if subprocess is None:
         print("Warning: 'subprocess' module not available for Linux idle check.")
-        return True # Assume active if module missing
+        return True  # Assume active if module missing
     try:
         # Run xprintidle to get idle time in milliseconds
-        output = subprocess.check_output(['xprintidle'], timeout=1).decode()
+        output = subprocess.check_output(["xprintidle"], timeout=1).decode()
         idle_milliseconds = int(output.strip())
         idle_seconds = idle_milliseconds / 1000.0
         return idle_seconds < 5.0
     except FileNotFoundError:
-        print("Warning: 'xprintidle' command not found. Please install xprintidle to check user activity.")
-        return True # Assume active if command missing
+        print(
+            "Warning: 'xprintidle' command not found. Please install xprintidle to check user activity."
+        )
+        return True  # Assume active if command missing
     except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
-        print(f"Warning: Could not check Linux idle time ({e}), assuming user is active.")
+        print(
+            f"Warning: Could not check Linux idle time ({e}), assuming user is active."
+        )
         return True
     except ValueError as e:
-        print(f"Warning: Could not parse output of xprintidle ('{output.strip()}'): {e}, assuming user is active.")
+        print(
+            f"Warning: Could not parse output of xprintidle ('{output.strip()}'): {e}, assuming user is active."
+        )
         return True
     except Exception as e:
         print(f"An error occurred during Linux idle check: {e}")
-        return True # Assume active on other errors
+        return True  # Assume active on other errors
 
 
 def is_user_active() -> bool:
@@ -450,5 +481,9 @@ def is_user_active() -> bool:
     elif sys.platform.startswith("linux"):
         return is_user_active_linux()
     else:
-        print(f"Warning: User active check not supported for platform '{sys.platform}', assuming active.")
-        raise NotImplementedError(f"Platform '{sys.platform}' not supported yet for is_user_active")
+        print(
+            f"Warning: User active check not supported for platform '{sys.platform}', assuming active."
+        )
+        raise NotImplementedError(
+            f"Platform '{sys.platform}' not supported yet for is_user_active"
+        )

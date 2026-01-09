@@ -14,8 +14,8 @@ from openrecall.database import (
 )
 from openrecall.nlp import cosine_similarity, get_embedding
 from openrecall.screenshot import record_screenshots_thread
-from openrecall.trayapp import start_tray_icon_blocking
 from openrecall.utils import human_readable_time, timestamp_to_human_readable
+from openrecall.trayapp import start_tray_icon_blocking, stop_tray_icon
 
 app = Flask(__name__)
 images_path = Path(__file__).resolve().parent.parent / "images"
@@ -175,7 +175,9 @@ def search():
             datetime.strptime(start_time_str, "%Y-%m-%dT%H:%M").timestamp()
         )
         if end_time_str:
-            end_time = int(datetime.strptime(end_time_str, "%Y-%m-%dT%H:%M").timestamp())
+            end_time = int(
+                datetime.strptime(end_time_str, "%Y-%m-%dT%H:%M").timestamp()
+            )
         else:
             end_time = int(datetime.now().timestamp())
         entries = get_entries_by_time_range(start_time, end_time)

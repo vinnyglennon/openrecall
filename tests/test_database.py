@@ -8,23 +8,26 @@ from unittest.mock import patch
 
 # Temporarily adjust path to import from openrecall
 import sys
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 # Now import from openrecall.database, mocking db_path *before* the import
 # Create a temporary file path that will be used by the mock
 temp_db_file = tempfile.NamedTemporaryFile(delete=False)
 mock_db_path = temp_db_file.name
-temp_db_file.close() # Close the file handle, but the file persists because delete=False
+temp_db_file.close()  # Close the file handle, but the file persists because delete=False
 
-with patch('openrecall.config.db_path', mock_db_path):
+with patch("openrecall.config.db_path", mock_db_path):
     from openrecall.database import (
         create_db,
         insert_entry,
         get_all_entries,
         get_timestamps,
     )
+
     # Also patch db_path within the database module itself if it was imported directly there
     import openrecall.database
+
     openrecall.database.db_path = mock_db_path
 
 
@@ -43,14 +46,13 @@ class TestDatabase(unittest.TestCase):
         """Remove the temporary database file after all tests."""
         # Try closing connection if any test left it open (though setUp/tearDown should handle this)
         try:
-            if hasattr(cls, 'conn') and cls.conn:
+            if hasattr(cls, "conn") and cls.conn:
                 cls.conn.close()
         except Exception:
-            pass # Ignore errors during cleanup
+            pass  # Ignore errors during cleanup
         os.remove(cls.db_path)
         # Clean up sys.path modification
         sys.path.pop(0)
-
 
     def setUp(self):
         """Connect to the database and clear entries before each test."""
@@ -69,16 +71,20 @@ class TestDatabase(unittest.TestCase):
         """Test if create_db creates the table and index."""
         # Check if table exists
         cursor = self.conn.cursor()
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name='entries'")
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='entries'"
+        )
         result = cursor.fetchone()
         self.assertIsNotNone(result)
-        self.assertEqual(result[0], 'entries')
+        self.assertEqual(result[0], "entries")
 
         # Check if index exists
-        cursor.execute("SELECT name FROM sqlite_master WHERE type='index' AND name='idx_timestamp'")
+        cursor.execute(
+            "SELECT name FROM sqlite_master WHERE type='index' AND name='idx_timestamp'"
+        )
         result = cursor.fetchone()
         self.assertIsNotNone(result)
-        self.assertEqual(result[0], 'idx_timestamp')
+        self.assertEqual(result[0], "idx_timestamp")
 
     def test_02_insert_entry(self):
         """Test inserting a single entry."""
@@ -123,7 +129,7 @@ class TestDatabase(unittest.TestCase):
 
         cursor.execute("SELECT text FROM entries WHERE timestamp = ?", (ts,))
         text = cursor.fetchone()[0]
-        self.assertEqual(text, "First text") # Ensure the first one was kept
+        self.assertEqual(text, "First text")  # Ensure the first one was kept
 
     def test_get_all_entries_empty(self):
         """Test getting entries from an empty database."""
@@ -134,7 +140,7 @@ class TestDatabase(unittest.TestCase):
         """Test retrieving multiple entries."""
         ts1 = int(time.time())
         ts2 = ts1 + 10
-        ts3 = ts1 - 10 # Ensure ordering works
+        ts3 = ts1 - 10  # Ensure ordering works
         emb1 = np.array([0.1] * 5, dtype=np.float32)
         emb2 = np.array([0.2] * 5, dtype=np.float32)
         emb3 = np.array([0.3] * 5, dtype=np.float32)
@@ -172,7 +178,9 @@ class TestDatabase(unittest.TestCase):
         ts1 = int(time.time())
         ts2 = ts1 + 10
         ts3 = ts1 - 10
-        emb = np.array([0.1] * 5, dtype=np.float32) # Embedding content doesn't matter here
+        emb = np.array(
+            [0.1] * 5, dtype=np.float32
+        )  # Embedding content doesn't matter here
 
         insert_entry("T1", ts1, emb, "A1", "T1")
         insert_entry("T2", ts2, emb, "A2", "T2")
@@ -184,5 +192,5 @@ class TestDatabase(unittest.TestCase):
         self.assertEqual(timestamps, [ts2, ts1, ts3])
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     unittest.main()

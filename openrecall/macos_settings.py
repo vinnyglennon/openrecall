@@ -1,17 +1,14 @@
 import os
 import sys
-import time
 import threading
 import plistlib
 import subprocess
-from typing import Tuple
 
 import objc
 from AppKit import (
     NSAlert,
     NSAlertFirstButtonReturn,
     NSAlertSecondButtonReturn,
-    NSAlertThirdButtonReturn,
     NSButton,
     NSStackView,
     NSTextField,
@@ -19,17 +16,17 @@ from AppKit import (
     NSLayoutConstraint,
     NSLayoutAttributeWidth,
     NSLayoutRelationGreaterThanOrEqual,
-    NSView,
 )
 from PyObjCTools import AppHelper
 
 from openrecall.settings import load_settings, save_settings
 from openrecall.config import appdata_folder, screenshots_path
 from openrecall.database import create_db
-from openrecall.screenshot import RETENTION_SECONDS
 
 LAUNCH_AGENT_ID = "com.openrecall.app"
-LAUNCH_AGENT_PATH = os.path.expanduser(f"~/Library/LaunchAgents/{LAUNCH_AGENT_ID}.plist")
+LAUNCH_AGENT_PATH = os.path.expanduser(
+    f"~/Library/LaunchAgents/{LAUNCH_AGENT_ID}.plist"
+)
 
 
 def _format_size(bytes_size: int) -> str:
@@ -142,7 +139,13 @@ def _set_login_item(enabled: bool):
 def _get_running_apps() -> list[str]:
     try:
         output = subprocess.check_output(["ps", "-axo", "comm"], text=True)
-        apps = sorted({line.strip().split("/")[-1] for line in output.splitlines() if line.strip()})
+        apps = sorted(
+            {
+                line.strip().split("/")[-1]
+                for line in output.splitlines()
+                if line.strip()
+            }
+        )
         return apps[:50]
     except Exception:
         return []
@@ -199,20 +202,28 @@ def show_settings_panel():
 
     running = _get_running_apps()
     if running:
-        stack.addArrangedSubview_(_label("Running apps (for reference): " + ", ".join(running[:10]), bold=False, size=11.0))
+        stack.addArrangedSubview_(
+            _label(
+                "Running apps (for reference): " + ", ".join(running[:10]),
+                bold=False,
+                size=11.0,
+            )
+        )
 
     # Delete note
-    stack.addArrangedSubview_(_label("Delete all data will remove screenshots and the database.", bold=False, size=12.0))
+    stack.addArrangedSubview_(
+        _label(
+            "Delete all data will remove screenshots and the database.",
+            bold=False,
+            size=12.0,
+        )
+    )
 
     stack.setAutoresizingMask_(18)  # flexible width/height
     alert.setAccessoryView_(stack)
 
     alert.addButtonWithTitle_("Delete All Data")
-<<<<<<< /Users/vinnyglennon/src/openrecall/openrecall/macos_settings.py
     alert.addButtonWithTitle_("Save")
-=======
-    alert.addButtonWithTitle_("Cancel")
->>>>>>> /Users/vinnyglennon/.windsurf/worktrees/openrecall/openrecall-9a9d8e47/openrecall/macos_settings.py
 
     response = alert.runModal()
 
@@ -220,7 +231,9 @@ def show_settings_panel():
         # Delete
         confirm = NSAlert.alloc().init()
         confirm.setMessageText_("Delete all data?")
-        confirm.setInformativeText_("This will remove all recordings and database. This cannot be undone.")
+        confirm.setInformativeText_(
+            "This will remove all recordings and database. This cannot be undone."
+        )
         confirm.addButtonWithTitle_("Delete")
         confirm.addButtonWithTitle_("Cancel")
         res = confirm.runModal()
@@ -237,7 +250,9 @@ def show_settings_panel():
     settings.incognito_block = bool(incognito_cb.state())
     raw_excludes = exclude_field.stringValue().strip()
     if raw_excludes:
-        settings.whitelist = [item.strip() for item in raw_excludes.split(",") if item.strip()]
+        settings.whitelist = [
+            item.strip() for item in raw_excludes.split(",") if item.strip()
+        ]
     else:
         settings.whitelist = []
 

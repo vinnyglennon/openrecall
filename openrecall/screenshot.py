@@ -6,8 +6,10 @@ from typing import List
 import mss
 import numpy as np
 from PIL import Image
+
 try:
     import cv2
+
     CV2_AVAILABLE = True
 except ImportError:
     cv2 = None  # type: ignore
@@ -249,20 +251,23 @@ def record_screenshots_thread(stop_event: threading.Event | None = None) -> None
         # Ensure we have a last_screenshot for each current_screenshot
         # This handles cases where monitor setup might change (though unlikely mid-run)
         if len(last_screenshots) != len(current_screenshots):
-             # If monitor count changes, reset last_screenshots and continue
-             last_screenshots = current_screenshots
-             time.sleep(3)
-             continue
-
+            # If monitor count changes, reset last_screenshots and continue
+            last_screenshots = current_screenshots
+            time.sleep(3)
+            continue
 
         for i, current_screenshot in enumerate(current_screenshots):
             last_screenshot = last_screenshots[i]
 
             if not is_similar(current_screenshot, last_screenshot):
-                last_screenshots[i] = current_screenshot  # Update the last screenshot for this monitor
+                last_screenshots[i] = (
+                    current_screenshot  # Update the last screenshot for this monitor
+                )
                 image = Image.fromarray(current_screenshot)
                 timestamp = int(time.time())
-                filename = f"{timestamp}.webp" # Align filename with search page expectations
+                filename = (
+                    f"{timestamp}.webp"  # Align filename with search page expectations
+                )
                 filepath = os.path.join(screenshots_path, filename)
                 image.save(
                     filepath,
@@ -278,7 +283,10 @@ def record_screenshots_thread(stop_event: threading.Event | None = None) -> None
                     continue
 
                 # Skip incognito/private windows by window title hint
-                if settings.incognito_block and "incognito" in active_window_title.lower():
+                if (
+                    settings.incognito_block
+                    and "incognito" in active_window_title.lower()
+                ):
                     continue
 
                 text: str = extract_text_from_image(current_screenshot)
@@ -289,7 +297,7 @@ def record_screenshots_thread(stop_event: threading.Event | None = None) -> None
                         text, timestamp, embedding, active_app_name, active_window_title
                     )
 
-        time.sleep(3) # Wait before taking the next screenshot
+        time.sleep(3)  # Wait before taking the next screenshot
     return None
 
 
