@@ -1,10 +1,11 @@
 import os
+import sys
 from threading import Thread, Event
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timedelta
 import logging
 import numpy as np
-from flask import Flask, render_template_string, request, send_from_directory
+from flask import Flask, redirect, render_template_string, request, send_from_directory, url_for
 from jinja2 import BaseLoader
 from dotenv import load_dotenv
 import sentry_sdk
@@ -18,9 +19,9 @@ os.environ.setdefault("TRANSFORMERS_NO_FLAX", "1")
 # Load environment variables from .env if present
 load_dotenv()
 
-# Sentry setup (DSN via .env SENTRY_DSN)
 sentry_sdk.init(
     dsn=os.getenv("SENTRY_DSN"),
+    auto_enabling_integrations=False,
     integrations=[LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)],
     traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0")),
     profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0")),
@@ -186,12 +187,191 @@ def timeline():
     )
 
 
+def _day_bounds(date_str: str) -> tuple[int, int]:
+    """Return start/end unix timestamps (inclusive) for a given YYYY-MM-DD."""
+    day = datetime.strptime(date_str, "%Y-%m-%d")
+    start = int(day.replace(hour=0, minute=0, second=0, microsecond=0).timestamp())
+    end = int((day + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0).timestamp()) - 1
+    return start, end
+
+
+def _summarize_daily_usage(date_str: str) -> tuple[list[dict], int]:
+    """Aggregate per-app usage for a day, approximating duration from capture cadence."""
+    start_ts, end_ts = _day_bounds(date_str)
+    entries = get_entries_by_time_range(start_ts, end_ts)
+    if not entries:
+        return [], 0
+
+    # Sort ascending by timestamp to measure deltas
+    entries = sorted(entries, key=lambda e: e.timestamp)
+    per_app_seconds: dict[str, int] = {}
+    total_active = 0
+    default_interval = 3  # seconds between captures
+    max_interval = 5 * 60  # cap long gaps to avoid overcounting
+
+    for idx, entry in enumerate(entries):
+        next_ts = entries[idx + 1].timestamp if idx + 1 < len(entries) else None
+        delta = default_interval
+        if next_ts:
+            delta = max(default_interval, min(next_ts - entry.timestamp, max_interval))
+        per_app_seconds[entry.app] = per_app_seconds.get(entry.app, 0) + delta
+        total_active += delta
+
+    usage = [
+        {"app": app, "seconds": secs, "minutes": int(round(secs / 60))}
+        for app, secs in per_app_seconds.items()
+    ]
+    usage.sort(key=lambda x: x["seconds"], reverse=True)
+    return usage, total_active
+
+
+def _hourly_activity(date_str: str) -> list[int]:
+    """Return per-hour active seconds approximation."""
+    start_ts, end_ts = _day_bounds(date_str)
+    entries = get_entries_by_time_range(start_ts, end_ts)
+    if not entries:
+        return [0] * 24
+
+    entries = sorted(entries, key=lambda e: e.timestamp)
+    default_interval = 3
+    max_interval = 5 * 60
+    hourly = [0] * 24
+
+    for idx, entry in enumerate(entries):
+        next_ts = entries[idx + 1].timestamp if idx + 1 < len(entries) else None
+        delta = default_interval
+        if next_ts:
+            delta = max(default_interval, min(next_ts - entry.timestamp, max_interval))
+        hour = datetime.fromtimestamp(entry.timestamp).hour
+        hourly[hour] += delta
+    return hourly
+
+
+@app.route("/daily")
+def daily():
+    date_str = request.args.get("date")
+    if not date_str:
+        date_str = datetime.now().strftime("%Y-%m-%d")
+    try:
+        usage, total_active = _summarize_daily_usage(date_str)
+        hourly = _hourly_activity(date_str)
+    except Exception:
+        usage, total_active, hourly = [], 0, [0] * 24
+
+    prev_day = (datetime.strptime(date_str, "%Y-%m-%d") - timedelta(days=1)).strftime("%Y-%m-%d")
+    next_day = (datetime.strptime(date_str, "%Y-%m-%d") + timedelta(days=1)).strftime("%Y-%m-%d")
+
+    return render_template_string(
+        """
+{% extends "base_template" %}
+{% block content %}
+<style>
+  body { background: #e8eaed; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
+  .daily-wrap { max-width: 960px; margin: 32px auto; padding-bottom: 24px; }
+  .card { border-radius: 16px; box-shadow: none; border: 1px solid #dfe3e8; background: #f9fafc; }
+  .section-header { font-weight: 600; color: #3f4450; }
+  .pill { background: #eef0f4; border: 1px solid #e3e6ec; border-radius: 12px; padding: 6px 12px; display: inline-flex; gap: 8px; align-items: center; font-size: 14px; color: #4b5563; }
+  .active-hours { display: grid; grid-template-columns: repeat(24, 1fr); gap: 4px; align-items: end; height: 80px; margin-top: 8px; }
+  .hour-bar { background: linear-gradient(180deg, #a855f7 0%, #7c3aed 100%); border-radius: 6px 6px 4px 4px; transition: opacity 0.2s ease; }
+  .hour-bar.zero { opacity: 0.15; background: #d9dce3; }
+  .hour-labels { display: grid; grid-template-columns: repeat(8, 1fr); font-size: 12px; color: #6b7280; margin-top: 8px; }
+  .app-list { list-style: none; padding: 0; margin: 0; }
+  .app-row { display: flex; justify-content: space-between; align-items: center; padding: 12px 0; border-bottom: 1px solid #e5e7eb; }
+  .app-row:last-child { border-bottom: none; }
+  .app-info { display: flex; align-items: center; gap: 12px; }
+  .app-avatar { width: 34px; height: 34px; border-radius: 9px; background: linear-gradient(145deg, #f4f5f8 0%, #e4e7ec 100%); display: grid; place-items: center; font-weight: 700; color: #4f46e5; }
+  .app-name { font-weight: 600; color: #2f3340; }
+  .app-time { color: #6b7280; font-weight: 600; }
+  .empty { color: #6b7280; }
+</style>
+
+<div class="daily-wrap">
+  <div class="d-flex justify-content-between align-items-center mb-3">
+    <h4 class="mb-0">Daily Recall</h4>
+    <div class="d-flex align-items-center gap-2">
+      <a class="btn btn-light btn-sm" href="{{ url_for('daily') }}?date={{ prev_day }}">◀</a>
+      <input type="date" class="form-control form-control-sm" id="datePicker" value="{{ date_str }}" style="width: 180px;">
+      <a class="btn btn-light btn-sm" href="{{ url_for('daily') }}?date={{ next_day }}">▶</a>
+    </div>
+  </div>
+
+  <div class="card p-3 mb-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="section-header">Active Hours</div>
+      <div class="pill">
+        <span class="bi bi-clock-history"></span>
+        <span>{{ (total_active // 3600) }}h {{ ((total_active % 3600) // 60) }}m</span>
+      </div>
+    </div>
+    <div class="active-hours">
+      {% set max_val = hourly|max if hourly else 0 %}
+      {% for val in hourly %}
+        {% set height = 8 if max_val == 0 else (max(8, (val / max_val) * 76)) %}
+        <div class="hour-bar {% if val == 0 %}zero{% endif %}" style="height: {{ height }}px;"></div>
+      {% endfor %}
+    </div>
+    <div class="hour-labels">
+      <div>3 AM</div>
+      <div>6 AM</div>
+      <div>9 AM</div>
+      <div>12 PM</div>
+      <div>3 PM</div>
+      <div>6 PM</div>
+      <div>9 PM</div>
+      <div></div>
+    </div>
+  </div>
+
+  <div class="card p-3">
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div class="section-header">Apps</div>
+    </div>
+    {% if usage %}
+      <ul class="app-list">
+      {% for item in usage %}
+        <li class="app-row">
+          <div class="app-info">
+            <div class="app-avatar">{{ (item.app or "U")[:1] }}</div>
+            <div class="app-name">{{ item.app or "Unknown" }}</div>
+          </div>
+          <div class="app-time">{{ item.minutes }}m</div>
+        </li>
+      {% endfor %}
+      </ul>
+    {% else %}
+      <div class="empty py-3">No activity recorded for this day.</div>
+    {% endif %}
+  </div>
+</div>
+
+<script>
+  const picker = document.getElementById('datePicker');
+  picker.addEventListener('change', (e) => {
+    const val = e.target.value;
+    if (val) {
+      window.location.href = `${location.pathname}?date=${val}`;
+    }
+  });
+</script>
+{% endblock %}
+""",
+        usage=usage,
+        total_active=total_active,
+        hourly=hourly,
+        date_str=date_str,
+        prev_day=prev_day,
+        next_day=next_day,
+    )
+
 @app.route("/search")
 def search():
     q = request.args.get("q")
     start_time_str = request.args.get("start_time")
     end_time_str = request.args.get("end_time")
     app_filter = request.args.get("app")
+
+    if not q and not start_time_str and not end_time_str and not app_filter:
+        return redirect(url_for("timeline"))
 
     entries = get_all_entries()
 
@@ -405,7 +585,61 @@ def favicon():
     return send_from_directory(images_path, "favicon.png")
 
 
+def ensure_single_instance():
+    """Prevent multiple instances of the app from running simultaneously."""
+    pid_file = Path(appdata_folder) / "openrecall.pid"
+    current_pid = os.getpid()
+
+    if pid_file.exists():
+        try:
+            existing_pid = int(pid_file.read_text().strip())
+        except Exception:
+            existing_pid = None
+
+        if existing_pid and existing_pid != current_pid:
+            proc_alive = False
+            try:
+                import psutil
+
+                if psutil.pid_exists(existing_pid):
+                    p = psutil.Process(existing_pid)
+                    # A stale pid file from a previous crash should not block reuse
+                    proc_alive = p.is_running() and p.status() != psutil.STATUS_ZOMBIE
+            except Exception:
+                # If psutil is unavailable or errors, be conservative and assume running
+                proc_alive = True
+
+            if proc_alive:
+                msg = f"OpenRecall already running with PID {existing_pid}. Exiting."
+                logging.error(msg)
+                print(msg)
+                sys.exit(1)
+
+        try:
+            pid_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+
+    try:
+        pid_file.write_text(str(current_pid))
+    except Exception as exc:
+        logging.warning("Could not write PID file %s: %s", pid_file, exc)
+
+
 if __name__ == "__main__":
+    ensure_single_instance()
+    # Apply dock visibility preference on macOS before showing UI
+    try:
+        from openrecall.settings import load_settings
+        settings = load_settings()
+        # Lazy import helper to avoid hard dependency when not on macOS
+        try:
+            from openrecall.trayapp import _set_dock_visibility  # type: ignore
+            _set_dock_visibility(settings.show_in_dock)
+        except Exception:
+            pass
+    except Exception:
+        pass
     create_db()
 
     print(f"Appdata folder: {appdata_folder}")
@@ -427,6 +661,15 @@ if __name__ == "__main__":
         print("Shutting down...")
     finally:
         stop_evt.set()
+        # Clean up PID file if it still points to this process
+        try:
+            pid_path = Path(appdata_folder) / "openrecall.pid"
+            if pid_path.exists():
+                recorded = pid_path.read_text().strip()
+                if recorded == str(os.getpid()):
+                    pid_path.unlink(missing_ok=True)
+        except Exception:
+            pass
         try:
             t.join(timeout=5)
         except Exception:

@@ -23,7 +23,12 @@ from AppKit import (
 )
 from PyObjCTools import AppHelper
 
-from openrecall.settings import load_settings, save_settings
+from openrecall.settings import (
+    EXCLUDED_DOMAIN_DEFAULTS,
+    SENSITIVE_DEFAULTS,
+    load_settings,
+    save_settings,
+)
 from openrecall.config import appdata_folder, screenshots_path
 from openrecall.database import create_db
 
@@ -203,6 +208,35 @@ def show_settings_panel():
     )
     stack.addArrangedSubview_(incognito_cb)
 
+    # Sensitive window title exclusion
+    stack.addArrangedSubview_(
+        _label("Exclude sensitive activities (window titles contain):", bold=True)
+    )
+    sensitive_field = NSTextField.alloc().init()
+    sensitive_field.setPlaceholderString_("Examples: bank|stripe|checkout|paypal|2fa|code|otp")
+    current_patterns = settings.sensitive_patterns or SENSITIVE_DEFAULTS
+    sensitive_field.setStringValue_("|".join(current_patterns))
+    _add_width_constraint(sensitive_field, 400)
+    stack.addArrangedSubview_(sensitive_field)
+
+    # Domain exclusion (e.g., sensitive sites)
+    stack.addArrangedSubview_(_label("Exclude domains (matches window title):", bold=True))
+    domains_field = NSTextField.alloc().init()
+    domains_field.setPlaceholderString_("Examples: paypal.com|bankofamerica.com|stripe.com")
+    current_domains = settings.excluded_domains or EXCLUDED_DOMAIN_DEFAULTS
+    domains_field.setStringValue_("|".join(current_domains))
+    _add_width_constraint(domains_field, 400)
+    stack.addArrangedSubview_(domains_field)
+
+    # High-risk OCR triggers
+    stack.addArrangedSubview_(_label("High-risk OCR triggers (mask image when detected):", bold=True))
+    ocr_field = NSTextField.alloc().init()
+    ocr_field.setPlaceholderString_("Examples: cvv|iban|seed phrase|routing number|2fa code")
+    current_ocr = settings.high_risk_ocr_triggers or []
+    ocr_field.setStringValue_("|".join(current_ocr))
+    _add_width_constraint(ocr_field, 400)
+    stack.addArrangedSubview_(ocr_field)
+
     # Whitelist apps list with checkboxes
     stack.addArrangedSubview_(_label("Whitelist Apps: Select apps you want recorded.", bold=True))
     running = sorted(set(_get_running_apps()))
@@ -273,6 +307,33 @@ def show_settings_panel():
         settings.whitelist = chosen
     else:
         settings.whitelist = []
+
+    # Sensitive patterns (split on | or newline/comma)
+    raw_patterns = sensitive_field.stringValue() or ""
+    parts = []
+    for chunk in raw_patterns.replace(",", "|").split("|"):
+        cleaned = chunk.strip()
+        if cleaned:
+            parts.append(cleaned)
+    settings.sensitive_patterns = parts or SENSITIVE_DEFAULTS.copy()
+
+    # Excluded domains (split on | or newline/comma)
+    raw_domains = domains_field.stringValue() or ""
+    domains_parts = []
+    for chunk in raw_domains.replace(",", "|").split("|"):
+        cleaned = chunk.strip()
+        if cleaned:
+            domains_parts.append(cleaned)
+    settings.excluded_domains = domains_parts or EXCLUDED_DOMAIN_DEFAULTS.copy()
+
+    # High-risk OCR triggers (split on | or newline/comma)
+    raw_ocr = ocr_field.stringValue() or ""
+    ocr_parts = []
+    for chunk in raw_ocr.replace(",", "|").split("|"):
+        cleaned = chunk.strip()
+        if cleaned:
+            ocr_parts.append(cleaned)
+    settings.high_risk_ocr_triggers = ocr_parts or HIGH_RISK_OCR_DEFAULTS.copy()
 
     # Apply side effects
     try:

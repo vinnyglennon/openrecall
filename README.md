@@ -166,5 +166,17 @@ uv run python setup.py py2app
 uv pip install -r requirements-macos.txt
 uv pip install -r requirements-linux.txt
 uv pip install -r requirements-windows.txt
+uv pip install -r requirements-macos-dev.txt
+
 
 export FLASK_DEBUG=1 ; uv run python3 -m openrecall.app
+
+
+
+Profiling:
+PYTHONPROFILEIMPORTTIME=1 uv run python -m openrecall.app 2> tmp/imports.log
+
+
+
+
+/Users/vinnyglennon/src/openrecall/dist/OpenRecall.app/Contents/MacOS/OpenRecall

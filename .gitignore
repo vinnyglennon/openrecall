@@ -10,3 +10,5 @@ build
 dev.md
 .env
 .mypy_cache
+.ruff_cache
+tmp/*

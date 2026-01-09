@@ -5,8 +5,6 @@ from typing import List
 
 import mss
 import numpy as np
-from PIL import Image
-
 try:
     import cv2
 
@@ -21,9 +19,12 @@ except ImportError:
 from openrecall import state
 from openrecall.config import args, screenshots_path
 from openrecall.database import insert_entry, delete_entries_older_than
-from openrecall.nlp import get_embedding
-from openrecall.ocr import extract_text_from_image
-from openrecall.settings import load_settings
+from openrecall.settings import (
+    EXCLUDED_DOMAIN_DEFAULTS,
+    HIGH_RISK_OCR_DEFAULTS,
+    SENSITIVE_DEFAULTS,
+    load_settings,
+)
 from openrecall.utils import (
     get_active_app_name,
     get_active_window_title,
@@ -31,11 +32,11 @@ from openrecall.utils import (
 )
 
 RETENTION_SECONDS = {
-    "1w": 7 * 24 * 3600,
-    "1m": 30 * 24 * 3600,
-    "3m": 90 * 24 * 3600,
-    "6m": 180 * 24 * 3600,
-    "1y": 365 * 24 * 3600,
+    "1 week": 7 * 24 * 3600,
+    "1 month": 30 * 24 * 3600,
+    "3 months": 90 * 24 * 3600,
+    "6 months": 180 * 24 * 3600,
+    "1 year": 365 * 24 * 3600,
     "Forever": None,
 }
 
@@ -203,6 +204,108 @@ def take_screenshots() -> List[np.ndarray]:
     return screenshots
 
 
+def _ensure_pil():
+    """Lazy-load minimal PIL plugins (WebP only) to speed startup."""
+    global _PIL_Image
+    if _PIL_Image is not None:
+        return _PIL_Image
+    # Limit plugin loading before importing PIL
+    os.environ.setdefault("PILLOW_DISABLE_PLUGIN_LOADING", "1")
+    from PIL import Image
+    try:
+        from PIL import WebPImagePlugin  # noqa: F401
+    except Exception:
+        pass
+    _PIL_Image = Image
+    return _PIL_Image
+
+
+def resize_image(image: np.ndarray, max_dim: int = 800) -> np.ndarray:
+    """
+    Resizes an image to fit within a maximum dimension while maintaining aspect ratio.
+
+    Args:
+        image: The input image as a NumPy array (RGB).
+        max_dim: The maximum dimension for resizing.
+
+    Returns:
+        The resized image as a NumPy array (RGB).
+    """
+    Image = _ensure_pil()
+    pil_image = Image.fromarray(image)
+    pil_image.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
+    return np.array(pil_image)
+
+
+_lazy_get_embedding = None
+_lazy_extract_text = None
+_PIL_Image = None
+EMBEDDING_DIM = 384  # matches all-MiniLM-L6-v2 default
+
+
+def _ensure_nlp_ocr():
+    """Lazy import heavy NLP/OCR only when first needed."""
+    global _lazy_get_embedding, _lazy_extract_text
+    if _lazy_get_embedding is None:
+        from openrecall.nlp import get_embedding
+
+        _lazy_get_embedding = get_embedding
+    if _lazy_extract_text is None:
+        from openrecall.ocr import extract_text_from_image
+
+        _lazy_extract_text = extract_text_from_image
+
+
+def _is_sensitive(title: str, patterns: list[str]) -> bool:
+    """Return True if title contains any sensitive pattern (case-insensitive)."""
+    title_cf = (title or "").casefold()
+    for pat in patterns:
+        if pat and pat.casefold() in title_cf:
+            return True
+    return False
+
+
+def _is_excluded_domain(title: str, domains: list[str]) -> bool:
+    """Return True if title contains any excluded domain hint (case-insensitive)."""
+    title_cf = (title or "").casefold()
+    for dom in domains:
+        if dom and dom.casefold() in title_cf:
+            return True
+    return False
+
+
+def _contains_high_risk_ocr(text: str, triggers: list[str]) -> bool:
+    """Return True if OCR text contains any high-risk trigger (case-insensitive)."""
+    if not text:
+        return False
+    text_cf = text.casefold()
+    for trig in triggers:
+        if trig and trig.casefold() in text_cf:
+            return True
+    return False
+
+
+def _make_restricted_image(shape: tuple[int, ...]) -> np.ndarray:
+    """Return a placeholder image with 'RESTRICTED' text."""
+    Image = _ensure_pil()
+    from PIL import ImageDraw, ImageFont
+
+    height, width = shape[0], shape[1]
+    img = Image.new("RGB", (width, height), color=(20, 20, 20))
+    draw = ImageDraw.Draw(img)
+    try:
+        font = ImageFont.truetype("Helvetica", size=max(24, width // 20))
+    except Exception:
+        font = ImageFont.load_default()
+    text = "RESTRICTED"
+    text_bbox = draw.textbbox((0, 0), text, font=font)
+    text_w = text_bbox[2] - text_bbox[0]
+    text_h = text_bbox[3] - text_bbox[1]
+    pos = ((width - text_w) // 2, (height - text_h) // 2)
+    draw.text(pos, text, fill=(220, 50, 50), font=font)
+    return np.array(img)
+
+
 def record_screenshots_thread(stop_event: threading.Event | None = None) -> None:
     """
     Continuously records screenshots, processes them, and stores relevant data.
@@ -260,20 +363,13 @@ def record_screenshots_thread(stop_event: threading.Event | None = None) -> None
             last_screenshot = last_screenshots[i]
 
             if not is_similar(current_screenshot, last_screenshot):
-                last_screenshots[i] = (
-                    current_screenshot  # Update the last screenshot for this monitor
-                )
-                image = Image.fromarray(current_screenshot)
+                last_screenshots[i] = current_screenshot  # Update the last screenshot for this monitor
+                sanitized_image = current_screenshot
                 timestamp = int(time.time())
                 filename = (
                     f"{timestamp}.webp"  # Align filename with search page expectations
                 )
                 filepath = os.path.join(screenshots_path, filename)
-                image.save(
-                    filepath,
-                    format="webp",
-                    lossless=True,
-                )
                 # Apply privacy/whitelist rules before processing OCR
                 active_app_name: str = get_active_app_name() or "Unknown App"
                 active_window_title: str = get_active_window_title() or "Unknown Title"
@@ -293,13 +389,43 @@ def record_screenshots_thread(stop_event: threading.Event | None = None) -> None
                 ):
                     continue
 
-                text: str = extract_text_from_image(current_screenshot)
-                # Only proceed if OCR actually extracts text
-                if text.strip():
-                    embedding: np.ndarray = get_embedding(text)
-                    insert_entry(
-                        text, timestamp, embedding, active_app_name, active_window_title
-                    )
+                # Skip sensitive window titles
+                patterns = settings.sensitive_patterns or SENSITIVE_DEFAULTS
+                if _is_sensitive(active_window_title, patterns):
+                    continue
+
+                domains = settings.excluded_domains or []
+                if _is_excluded_domain(active_window_title, domains):
+                    continue
+
+                _ensure_nlp_ocr()
+
+                text: str = _lazy_extract_text(current_screenshot)
+
+                triggers = settings.high_risk_ocr_triggers or HIGH_RISK_OCR_DEFAULTS
+                high_risk = _contains_high_risk_ocr(text, triggers)
+                if high_risk:
+                    sanitized_image = _make_restricted_image(current_screenshot.shape)
+                    text = "RESTRICTED"
+                    embedding: np.ndarray = np.zeros(EMBEDDING_DIM, dtype=np.float32)
+                else:
+                    # Only proceed if OCR actually extracts text
+                    if text.strip():
+                        embedding: np.ndarray = _lazy_get_embedding(text)
+                    else:
+                        continue
+
+                Image = _ensure_pil()
+                image = Image.fromarray(sanitized_image)
+                image.save(
+                    filepath,
+                    format="webp",
+                    lossless=True,
+                )
+
+                insert_entry(
+                    text, timestamp, embedding, active_app_name, active_window_title
+                )
 
         time.sleep(3)  # Wait before taking the next screenshot
     return None
@@ -316,6 +442,7 @@ def resize_image(image: np.ndarray, max_dim: int = 800) -> np.ndarray:
     Returns:
         The resized image as a NumPy array (RGB).
     """
+    Image = _ensure_pil()
     pil_image = Image.fromarray(image)
     pil_image.thumbnail((max_dim, max_dim), Image.Resampling.LANCZOS)
     return np.array(pil_image)

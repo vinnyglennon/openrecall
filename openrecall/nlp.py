@@ -1,6 +1,5 @@
-import numpy as np
-from sentence_transformers import SentenceTransformer
 import logging
+import numpy as np
 
 logger = logging.getLogger(__name__)
 # Quiet noisy third-party INFO logs
@@ -10,16 +9,25 @@ logging.getLogger("sentence_transformers.SentenceTransformer").setLevel(logging.
 logging.getLogger("root").setLevel(logging.WARNING)
 
 # Constants
-MODEL_NAME: str = "all-MiniLM-L6-v2"
-EMBEDDING_DIM: int = 384  # Dimension for all-MiniLM-L6-v2
+MODEL_NAME: str = "thenlper/gte-small"
+EMBEDDING_DIM: int = 384 
 
-# Load the model globally to avoid reloading it on every call
-try:
-    model = SentenceTransformer(MODEL_NAME)
-    logger.info(f"SentenceTransformer model '{MODEL_NAME}' loaded successfully.")
-except Exception as e:
-    logger.error(f"Failed to load SentenceTransformer model '{MODEL_NAME}': {e}")
-    model = None
+_model = None
+
+
+def _get_model():
+    """Lazily load the SentenceTransformer model to avoid import-time hit."""
+    global _model
+    if _model is None:
+        try:
+            from sentence_transformers import SentenceTransformer
+
+            _model = SentenceTransformer(MODEL_NAME, device="cpu")
+            logger.info("SentenceTransformer model '%s' loaded.", MODEL_NAME)
+        except Exception as e:
+            logger.error("Failed to load SentenceTransformer model '%s': %s", MODEL_NAME, e)
+            _model = None
+    return _model
 
 
 def get_embedding(text: str) -> np.ndarray:
@@ -38,6 +46,7 @@ def get_embedding(text: str) -> np.ndarray:
         or a zero vector if the input is empty, whitespace only, or the
         model failed to load. The array type is float32.
     """
+    model = _get_model()
     if model is None:
         logger.error("SentenceTransformer model is not loaded. Returning zero vector.")
         return np.zeros(EMBEDDING_DIM, dtype=np.float32)
