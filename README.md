@@ -125,7 +125,7 @@ python3 -m pip install .
 Or to include tests locally:
 
 ```bash
-python3 -m pip install ".[dev]"
+uv pip install ".[dev]"
 ```
 
 To run:

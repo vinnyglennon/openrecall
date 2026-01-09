@@ -25,7 +25,7 @@ install_requires = [
 # Define OS-specific dependencies
 extras_require = {
     "windows": ["pywin32", "psutil"],
-    "macos": ["pyobjc==10.3"],
+    "macos": ["pyobjc==12.1"],
     "linux": [],
     "python-doctr": [
         "python-doctr"
