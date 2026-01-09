@@ -136,3 +136,13 @@ def get_entries_by_time_range(start_time: int, end_time: int) -> List[Entry]:
             (start_time, end_time),
         ).fetchall()
         return [Entry(*result) for result in results]
+
+
+def delete_entries_older_than(cutoff_timestamp: int) -> int:
+    """Delete entries older than the cutoff. Returns number deleted."""
+    with sqlite3.connect(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM entries WHERE timestamp < ?", (cutoff_timestamp,))
+        deleted = cursor.rowcount
+        conn.commit()
+        return deleted

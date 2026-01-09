@@ -8,14 +8,55 @@ from PIL import Image
 
 from openrecall import state
 from openrecall.config import args, screenshots_path
-from openrecall.database import insert_entry
+from openrecall.database import insert_entry, delete_entries_older_than
 from openrecall.nlp import get_embedding
 from openrecall.ocr import extract_text_from_image
+from openrecall.settings import load_settings
 from openrecall.utils import (
     get_active_app_name,
     get_active_window_title,
     is_user_active,
 )
+
+RETENTION_SECONDS = {
+    "1w": 7 * 24 * 3600,
+    "1m": 30 * 24 * 3600,
+    "3m": 90 * 24 * 3600,
+    "6m": 180 * 24 * 3600,
+    "1y": 365 * 24 * 3600,
+    "Forever": None,
+}
+
+
+def _retention_cutoff(retention: str) -> int | None:
+    """Return cutoff timestamp for retention label, or None to keep forever."""
+    seconds = RETENTION_SECONDS.get(retention, None)
+    if seconds is None:
+        return None
+    return int(time.time()) - seconds
+
+
+def _cleanup_old_entries(cutoff_timestamp: int) -> None:
+    """Delete db entries and screenshot files older than cutoff."""
+    if cutoff_timestamp is None:
+        return
+    delete_entries_older_than(cutoff_timestamp)
+    # Remove old screenshot files
+    try:
+        for fname in os.listdir(screenshots_path):
+            if not fname.endswith(".webp"):
+                continue
+            try:
+                ts = int(os.path.splitext(fname)[0])
+            except ValueError:
+                continue
+            if ts < cutoff_timestamp:
+                try:
+                    os.remove(os.path.join(screenshots_path, fname))
+                except OSError:
+                    pass
+    except FileNotFoundError:
+        pass
 
 
 def mean_structured_similarity_index(
@@ -123,7 +164,24 @@ def record_screenshots_thread() -> None:
 
     last_screenshots: List[np.ndarray] = take_screenshots()
 
+    settings = load_settings()
+    last_settings_refresh = time.time()
+    last_retention_cleanup = 0.0
+
     while True:
+        # Refresh settings periodically (every 60s)
+        now = time.time()
+        if now - last_settings_refresh > 60:
+            settings = load_settings()
+            last_settings_refresh = now
+
+        # Apply retention cleanup every 30 minutes
+        if now - last_retention_cleanup > 1800:
+            cutoff = _retention_cutoff(settings.retention)
+            if cutoff:
+                _cleanup_old_entries(cutoff)
+            last_retention_cleanup = now
+
         if state.is_paused():
             time.sleep(3)
             continue
@@ -157,12 +215,23 @@ def record_screenshots_thread() -> None:
                     format="webp",
                     lossless=True,
                 )
+                # Apply privacy/whitelist rules before processing OCR
+                active_app_name: str = get_active_app_name() or "Unknown App"
+                active_window_title: str = get_active_window_title() or "Unknown Title"
+
+                # Skip apps not in whitelist (if whitelist is set)
+                if settings.whitelist:
+                    if active_app_name not in settings.whitelist:
+                        continue
+
+                # Skip incognito/private windows by window title hint
+                if settings.incognito_block and "incognito" in active_window_title.lower():
+                    continue
+
                 text: str = extract_text_from_image(current_screenshot)
                 # Only proceed if OCR actually extracts text
                 if text.strip():
                     embedding: np.ndarray = get_embedding(text)
-                    active_app_name: str = get_active_app_name() or "Unknown App"
-                    active_window_title: str = get_active_window_title() or "Unknown Title"
                     insert_entry(
                         text, timestamp, embedding, active_app_name, active_window_title
                     )
