@@ -2,9 +2,12 @@ import numpy as np
 from sentence_transformers import SentenceTransformer
 import logging
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+# Quiet noisy third-party INFO logs
+logging.getLogger().setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers").setLevel(logging.WARNING)
+logging.getLogger("sentence_transformers.SentenceTransformer").setLevel(logging.WARNING)
+logging.getLogger("root").setLevel(logging.WARNING)
 
 # Constants
 MODEL_NAME: str = "all-MiniLM-L6-v2"

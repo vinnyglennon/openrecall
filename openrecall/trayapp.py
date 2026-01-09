@@ -119,6 +119,15 @@ def create_system_tray_icon() -> Optional[pystray.Icon]:
     return icon
 
 
+def stop_tray_icon():
+    global _tray_icon
+    if _tray_icon:
+        try:
+            _tray_icon.stop()
+        except Exception:
+            pass
+
+
 def _format_size(bytes_size: int) -> str:
     suffixes = ["B", "KB", "MB", "GB", "TB"]
     size = float(bytes_size)
@@ -315,4 +324,12 @@ def start_tray_icon_blocking():
     if _tray_icon is None:
         logger.warning("Tray icon not started (icon missing).")
         return
-    _tray_icon.run()
+    try:
+        _tray_icon.run()
+    except Exception:
+        logger.exception("Tray icon failed to run; retrying detached.")
+        try:
+            _tray_icon.run_detached()
+            logger.info("Tray icon started (detached fallback).")
+        except Exception:
+            logger.exception("Tray icon detached fallback failed.")

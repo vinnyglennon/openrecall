@@ -1,5 +1,6 @@
 import os
 import time
+import threading
 from typing import List, Tuple
 
 import mss
@@ -149,7 +150,7 @@ def take_screenshots() -> List[np.ndarray]:
     return screenshots
 
 
-def record_screenshots_thread() -> None:
+def record_screenshots_thread(stop_event: threading.Event | None = None) -> None:
     """
     Continuously records screenshots, processes them, and stores relevant data.
 
@@ -168,7 +169,9 @@ def record_screenshots_thread() -> None:
     last_settings_refresh = time.time()
     last_retention_cleanup = 0.0
 
-    while True:
+    stop_evt = stop_event or threading.Event()
+
+    while not stop_evt.is_set():
         # Refresh settings periodically (every 60s)
         now = time.time()
         if now - last_settings_refresh > 60:

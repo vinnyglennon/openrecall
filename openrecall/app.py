@@ -1,4 +1,4 @@
-from threading import Thread
+from threading import Thread, Event
 from pathlib import Path
 from datetime import datetime
 import numpy as np
@@ -383,13 +383,32 @@ if __name__ == "__main__":
 
     print(f"Appdata folder: {appdata_folder}")
 
+    stop_evt = Event()
+
     # Start the thread to record screenshots
-    t = Thread(target=record_screenshots_thread, daemon=True)
+    t = Thread(target=record_screenshots_thread, args=(stop_evt,), daemon=True)
     t.start()
 
     # Run Flask in a background thread so we can keep the tray icon on the main thread
     web_thread = Thread(target=app.run, kwargs={"port": 8082}, daemon=True)
     web_thread.start()
 
-    # Start tray icon in the main thread (more reliable on macOS)
-    start_tray_icon_blocking()
+    try:
+        # Start tray icon in the main thread (more reliable on macOS)
+        start_tray_icon_blocking()
+    except KeyboardInterrupt:
+        print("Shutting down...")
+    finally:
+        stop_evt.set()
+        try:
+            t.join(timeout=5)
+        except Exception:
+            pass
+        try:
+            web_thread.join(timeout=2)
+        except Exception:
+            pass
+        try:
+            stop_tray_icon()
+        except Exception:
+            pass
