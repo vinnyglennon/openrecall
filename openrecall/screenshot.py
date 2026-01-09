@@ -6,6 +6,15 @@ from typing import List, Tuple
 import mss
 import numpy as np
 from PIL import Image
+try:
+    import cv2
+    CV2_AVAILABLE = True
+except ImportError:
+    cv2 = None  # type: ignore
+    CV2_AVAILABLE = False
+    raise ImportError(
+        "OpenCV (cv2) is required for fast SSIM. Install opencv-python or opencv-python-headless."
+    )
 
 from openrecall import state
 from openrecall.config import args, screenshots_path
@@ -109,7 +118,11 @@ def is_similar(
     # Compress images to reduce size and improve performance
     compress_img1: np.ndarray = resize_image(img1)
     compress_img2: np.ndarray = resize_image(img2)
-    similarity: float = mean_structured_similarity_index(compress_img1, compress_img2)
+
+    if not CV2_AVAILABLE:
+        raise RuntimeError("OpenCV not available; fast SSIM required.")
+
+    similarity: float = _fast_ssim_cv(compress_img1, compress_img2)
     return similarity >= similarity_threshold
 
 

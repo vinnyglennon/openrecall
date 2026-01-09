@@ -142,3 +142,10 @@ Run Tests:
 ```bash
 python3 -m pytest tests
 ```
+
+
+### UV
+curl -LsSf https://astral.sh/uv/install.sh | sh  # installs uv
+uv venv
+source .venv/bin/activate
+uv pip install ".[dev]"

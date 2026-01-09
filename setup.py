@@ -9,7 +9,8 @@ with io.open("README.md", "r", encoding="utf-8") as f:
 
 install_requires = [
     "Flask==3.1.2",
-    "numpy==1.26.4",
+    "numpy==2.2.6",
+    "opencv-python-headless==4.12.0.88",
     "mss==10.1.0",
     "sentence-transformers==5.2.0",
     "torch==2.9.1",
@@ -27,7 +28,7 @@ extras_require = {
     "macos": ["pyobjc==10.3"],
     "linux": [],
     "python-doctr": [
-        "python-doctr @ git+https://github.com/koenvaneijk/doctr.git@af711bc04eb8876a7189923fb51ec44481ee18cd"
+        "python-doctr"
     ],
     "dev": [
         "pytest==9.0.2",
