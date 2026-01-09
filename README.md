@@ -155,3 +155,16 @@ uv pip install ".[dev]"
 
 Ruff:
 ruff check . --fix
+
+black .
+
+uv run mypy openrecall
+
+uv run python setup.py py2app
+
+
+uv pip install -r requirements-macos.txt
+uv pip install -r requirements-linux.txt
+uv pip install -r requirements-windows.txt
+
+export FLASK_DEBUG=1 ; uv run python3 -m openrecall.app

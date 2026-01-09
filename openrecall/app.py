@@ -1,9 +1,21 @@
 from threading import Thread, Event
 from pathlib import Path
 from datetime import datetime
+import logging
 import numpy as np
 from flask import Flask, render_template_string, request, send_from_directory
 from jinja2 import BaseLoader
+from rich.logging import RichHandler
+from rich.traceback import install as rich_traceback_install
+
+# Enable rich tracebacks and logging formatting early
+rich_traceback_install(show_locals=False)
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(message)s",
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
 
 from openrecall.config import appdata_folder, screenshots_path
 from openrecall.database import (
@@ -392,7 +404,7 @@ if __name__ == "__main__":
     t.start()
 
     # Run Flask in a background thread so we can keep the tray icon on the main thread
-    web_thread = Thread(target=app.run, kwargs={"port": 8082}, daemon=True)
+    web_thread = Thread(target=app.run, kwargs={"port": 8082, "use_reloader": False}, daemon=True)
     web_thread.start()
 
     try:

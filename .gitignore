@@ -7,3 +7,5 @@ build
 .vscode
 .aider*
 .venv
+dev.md
+.env

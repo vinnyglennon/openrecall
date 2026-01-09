@@ -278,8 +278,12 @@ def record_screenshots_thread(stop_event: threading.Event | None = None) -> None
                 active_app_name: str = get_active_app_name() or "Unknown App"
                 active_window_title: str = get_active_window_title() or "Unknown Title"
 
-                # Exclude apps in list (stored as whitelist field but used as exclude list)
-                if settings.whitelist and active_app_name in settings.whitelist:
+                # Whitelist behavior: if a whitelist is set, only process those apps
+                if settings.whitelist:
+                    if active_app_name not in settings.whitelist:
+                        continue
+                else:
+                    # No whitelist set: do not record until user selects apps
                     continue
 
                 # Skip incognito/private windows by window title hint
