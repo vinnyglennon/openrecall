@@ -279,8 +279,8 @@ def search():
             <div class="row">
                 {% for entry in entries %}
                     <div class="col-md-3 mb-4">
-                        <div class="card shadow-sm h-100">
-                            <a href="#" data-toggle="modal" data-target="#modal-{{ loop.index0 }}">
+                        <div class="card shadow-sm h-100 result-card" data-modal-id="modal-{{ loop.index0 }}">
+                            <a href="#" data-toggle="modal" data-target="#modal-{{ loop.index0 }}" data-modal-id="modal-{{ loop.index0 }}">
                                 <img src="/static/{{ entry.timestamp }}.webp" alt="Image" class="card-img-top">
                             </a>
                             <div class="card-body py-2">
@@ -293,7 +293,16 @@ def search():
                     </div>
                     <div class="modal fade" id="modal-{{ loop.index0 }}" tabindex="-1" role="dialog" aria-labelledby="exampleModalLabel" aria-hidden="true">
                         <div class="modal-dialog modal-xl" role="document" style="max-width: none; width: 100vw; height: 100vh; padding: 20px;">
-                            <div class="modal-content" style="height: calc(100vh - 40px); width: calc(100vw - 40px); padding: 0;">
+                            <div class="modal-content" style="height: calc(100vh - 40px); width: calc(100vw - 40px); padding: 0; position: relative;">
+                                <button type="button" class="close position-absolute" data-dismiss="modal" aria-label="Close" style="right: 16px; top: 8px; z-index: 10;">
+                                    <span aria-hidden="true">&times;</span>
+                                </button>
+                                <button type="button" class="btn btn-light position-absolute prev-btn" data-nav="prev" style="left: 10px; top: 50%; transform: translateY(-50%); z-index: 10;">
+                                    <i class="bi bi-chevron-left"></i>
+                                </button>
+                                <button type="button" class="btn btn-light position-absolute next-btn" data-nav="next" style="right: 10px; top: 50%; transform: translateY(-50%); z-index: 10;">
+                                    <i class="bi bi-chevron-right"></i>
+                                </button>
                                 <div class="modal-body" style="padding: 0;">
                                     <img src="/static/{{ entry.timestamp }}.webp" alt="Image" style="width: 100%; height: 100%; object-fit: contain; margin: 0 auto;">
                                 </div>
@@ -308,6 +317,48 @@ def search():
             </div>
         {% endif %}
     </div>
+    <script>
+      (function() {
+        const modalIds = Array.from(document.querySelectorAll('.result-card')).map(el => el.dataset.modalId);
+        if (!modalIds.length) return;
+
+        let currentIndex = 0;
+
+        function showModalByIndex(idx) {
+          const clamped = ((idx % modalIds.length) + modalIds.length) % modalIds.length;
+          currentIndex = clamped;
+          const id = modalIds[clamped];
+          $('.modal').modal('hide');
+          $('#' + id).modal('show');
+        }
+
+        document.querySelectorAll('.result-card a[data-modal-id]').forEach((link, idx) => {
+          link.addEventListener('click', () => {
+            currentIndex = idx;
+          });
+        });
+
+        document.querySelectorAll('.modal .prev-btn').forEach(btn => {
+          btn.addEventListener('click', () => showModalByIndex(currentIndex - 1));
+        });
+
+        document.querySelectorAll('.modal .next-btn').forEach(btn => {
+          btn.addEventListener('click', () => showModalByIndex(currentIndex + 1));
+        });
+
+        document.addEventListener('keydown', (e) => {
+          const anyOpen = document.querySelector('.modal.show');
+          if (!anyOpen) return;
+          if (e.key === 'ArrowLeft') {
+            e.preventDefault();
+            showModalByIndex(currentIndex - 1);
+          } else if (e.key === 'ArrowRight') {
+            e.preventDefault();
+            showModalByIndex(currentIndex + 1);
+          }
+        });
+      })();
+    </script>
 {% endblock %}
 """,
         entries=sorted_entries,
