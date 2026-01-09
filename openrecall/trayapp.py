@@ -21,12 +21,19 @@ from importlib.metadata import PackageNotFoundError, version as pkg_version
 import pystray
 from PIL import Image
 
+logger = logging.getLogger(__name__)
+
 from openrecall.config import appdata_folder
 from openrecall.settings import load_settings, save_settings, Settings
 from openrecall.database import create_db
 from openrecall.config import screenshots_path
 
-logger = logging.getLogger(__name__)
+present_settings_panel = None
+if platform.system().lower() == "darwin":
+    try:
+        from openrecall.macos_settings import present_settings_panel  # type: ignore
+    except Exception as exc:
+        logger.warning("Failed to load macOS settings panel: %s", exc)
 
 ICON_FILENAME = "lookback-icon.png"
 ICON_PATH = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "images", ICON_FILENAME))
@@ -213,12 +220,12 @@ def _macos_settings_flow():
     running_apps = _get_running_apps()
 
     info = (
-        f"OpenRecall Settings\n\n"
-        f"Data folder: {appdata_folder}\n"
-        f"Disk usage: {size_str}\n\n"
-        "Configure options via the prompts that follow."
+        f"Current Disk Space Used: {size_str}\\n"
+        "Retention affects how long recordings are kept. Shorter retention saves space."
     )
-    _osascript(f'display dialog "{info}" buttons {{"OK"}} default button 1 with title "OpenRecall"')
+    _osascript(
+        f'display dialog "{info}" buttons {{"OK"}} default button 1 with title "OpenRecall Settings"'
+    )
 
     # Startup
     startup_default = "Enable" if settings.startup_enabled else "Disable"
@@ -229,22 +236,28 @@ def _macos_settings_flow():
     # Retention
     retention_default = settings.retention
     retention_choice = _osascript(
-        f'choose from list {{"1w", "1m", "3m", "6m", "1y", "Forever"}} with prompt "Retention period" default items {{"{retention_default}"}} with title "OpenRecall Settings"'
+        f'choose from list {{"1w", "1m", "3m", "6m", "1y", "Forever"}} with prompt "Retention period — how long to keep recordings" default items {{"{retention_default}"}} with title "OpenRecall Settings"'
     )
 
     # Incognito toggle
     incognito_default = "Do not record incognito" if settings.incognito_block else "Record all"
     incognito_choice = _osascript(
-        f'choose from list {{"Do not record incognito", "Record all"}} with prompt "Incognito/Private windows" default items {{"{incognito_default}"}} with title "OpenRecall Settings"'
+        f'choose from list {{"Do not record incognito", "Record all"}} with prompt "Private browsing: skip incognito/private windows?" default items {{"{incognito_default}"}} with title "OpenRecall Settings"'
     )
 
     # Whitelist / running apps
+    # Exclude apps (stored in settings.whitelist for now)
+    exclude_selection = None
     if running_apps:
-        # Limit to a reasonable subset to avoid osascript size/syntax issues
         limited_apps = running_apps[:30]
         apps_list = "{" + ", ".join(f'"{_escape_item(app)}"' for app in limited_apps) + "}"
-        whitelist = _osascript(
-            f'choose from list {apps_list} with prompt "Select apps to record (whitelist)" multiple selections allowed with title "OpenRecall Settings"'
+        default_items = (
+            "{" + ", ".join(f'"{_escape_item(app)}"' for app in settings.whitelist or []) + "}"
+            if settings.whitelist
+            else "{}"
+        )
+        exclude_selection = _osascript(
+            f'choose from list {apps_list} with prompt "Exclude apps from recording (select to exclude)" default items {default_items} multiple selections allowed with title "OpenRecall Settings"'
         )
     else:
         logger.info("No running apps detected for whitelist selection.")
@@ -282,9 +295,8 @@ def _macos_settings_flow():
     settings.startup_enabled = "Enable" in startup_choice
     settings.retention = (retention_choice or settings.retention).strip("{}")
     settings.incognito_block = "Do not record incognito" in incognito_choice
-    if running_apps and whitelist:
-        # osascript returns comma-separated string or single selection
-        chosen = [w.strip() for w in whitelist.split(",")]
+    if running_apps and exclude_selection:
+        chosen = [w.strip() for w in exclude_selection.split(",") if w.strip()]
         settings.whitelist = chosen
 
     if not deleted:
@@ -293,9 +305,14 @@ def _macos_settings_flow():
 
 def _open_settings(icon=None, item=None):
     # Prefer per-platform native flows without Tk/webview
-    if platform.system().lower() == "darwin":
-        _macos_settings_flow()
+    if platform.system().lower() == "darwin" and present_settings_panel:
+        try:
+            present_settings_panel()
+        except Exception as exc:
+            logger.exception("Failed to open macOS settings panel: %s", exc)
         return
+    elif platform.system().lower() == "darwin" and not present_settings_panel:
+        logger.warning("macOS settings panel not available (PyObjC not installed or import failed).")
 
     # Fallback for other platforms: simple message
     logger.warning("Settings UI not implemented for this platform without Tk/webview.")

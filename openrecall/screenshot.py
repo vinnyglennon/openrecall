@@ -102,6 +102,44 @@ def mean_structured_similarity_index(
     return ssim_index
 
 
+def _fast_ssim_cv(img1: np.ndarray, img2: np.ndarray) -> float:
+    """Fast SSIM using OpenCV (grayscale)."""
+    # Ensure uint8 and grayscale
+    if img1.dtype != np.uint8:
+        img1 = img1.astype(np.uint8)
+    if img2.dtype != np.uint8:
+        img2 = img2.astype(np.uint8)
+    if len(img1.shape) == 3:
+        img1 = cv2.cvtColor(img1, cv2.COLOR_RGB2GRAY)
+    if len(img2.shape) == 3:
+        img2 = cv2.cvtColor(img2, cv2.COLOR_RGB2GRAY)
+
+    C1 = 6.5025
+    C2 = 58.5225
+
+    img1 = img1.astype(np.float32)
+    img2 = img2.astype(np.float32)
+
+    kernel = cv2.getGaussianKernel(11, 1.5)
+    window = kernel @ kernel.T
+
+    mu1 = cv2.filter2D(img1, -1, window)
+    mu2 = cv2.filter2D(img2, -1, window)
+
+    mu1_sq = mu1 * mu1
+    mu2_sq = mu2 * mu2
+    mu1_mu2 = mu1 * mu2
+
+    sigma1_sq = cv2.filter2D(img1 * img1, -1, window) - mu1_sq
+    sigma2_sq = cv2.filter2D(img2 * img2, -1, window) - mu2_sq
+    sigma12 = cv2.filter2D(img1 * img2, -1, window) - mu1_mu2
+
+    ssim_map = ((2 * mu1_mu2 + C1) * (2 * sigma12 + C2)) / (
+        (mu1_sq + mu2_sq + C1) * (sigma1_sq + sigma2_sq + C2)
+    )
+    return float(cv2.mean(ssim_map)[0])
+
+
 def is_similar(
     img1: np.ndarray, img2: np.ndarray, similarity_threshold: float = 0.9
 ) -> bool:
@@ -235,10 +273,9 @@ def record_screenshots_thread(stop_event: threading.Event | None = None) -> None
                 active_app_name: str = get_active_app_name() or "Unknown App"
                 active_window_title: str = get_active_window_title() or "Unknown Title"
 
-                # Skip apps not in whitelist (if whitelist is set)
-                if settings.whitelist:
-                    if active_app_name not in settings.whitelist:
-                        continue
+                # Exclude apps in list (stored as whitelist field but used as exclude list)
+                if settings.whitelist and active_app_name in settings.whitelist:
+                    continue
 
                 # Skip incognito/private windows by window title hint
                 if settings.incognito_block and "incognito" in active_window_title.lower():

@@ -1,0 +1,194 @@
+import os
+import time
+import threading
+from typing import Tuple
+
+import objc
+from AppKit import (
+    NSAlert,
+    NSAlertFirstButtonReturn,
+    NSAlertSecondButtonReturn,
+    NSAlertThirdButtonReturn,
+    NSButton,
+    NSStackView,
+    NSTextField,
+    NSPopUpButton,
+    NSLayoutConstraint,
+    NSLayoutAttributeWidth,
+    NSLayoutRelationGreaterThanOrEqual,
+    NSView,
+)
+from PyObjCTools import AppHelper
+
+from openrecall.settings import load_settings, save_settings
+from openrecall.config import appdata_folder, screenshots_path
+from openrecall.database import create_db
+from openrecall.screenshot import RETENTION_SECONDS
+
+
+def _format_size(bytes_size: int) -> str:
+    suffixes = ["B", "KB", "MB", "GB", "TB"]
+    size = float(bytes_size)
+    for suffix in suffixes:
+        if size < 1024:
+            return f"{size:.1f} {suffix}"
+        size /= 1024
+    return f"{size:.1f} PB"
+
+
+def _folder_size(path: str) -> int:
+    total = 0
+    for root, dirs, files in os.walk(path):
+        for name in files:
+            try:
+                total += os.path.getsize(os.path.join(root, name))
+            except OSError:
+                continue
+    return total
+
+
+def _delete_all_data():
+    for root, dirs, files in os.walk(appdata_folder, topdown=False):
+        for f in files:
+            try:
+                os.remove(os.path.join(root, f))
+            except OSError:
+                pass
+        for d in dirs:
+            try:
+                os.rmdir(os.path.join(root, d))
+            except OSError:
+                pass
+    os.makedirs(appdata_folder, exist_ok=True)
+    os.makedirs(screenshots_path, exist_ok=True)
+    create_db()
+
+
+def _label(text: str, bold: bool = False, size: float = 13.0) -> NSTextField:
+    lbl = NSTextField.alloc().init()
+    lbl.setStringValue_(text)
+    lbl.setEditable_(False)
+    lbl.setBezeled_(False)
+    lbl.setDrawsBackground_(False)
+    font = lbl.font()
+    if bold:
+        font = font.fontDescriptor().fontDescriptorWithSymbolicTraits_(0x0002)
+        font = objc.lookUpClass("NSFont").fontWithDescriptor_size_(font, size)
+    else:
+        font = font.fontWithSize_(size)
+    lbl.setFont_(font)
+    return lbl
+
+
+def _checkbox(title: str, state: bool) -> NSButton:
+    btn = NSButton.alloc().init()
+    btn.setButtonType_(1)  # NSSwitch/checkbox
+    btn.setTitle_(title)
+    btn.setState_(1 if state else 0)
+    return btn
+
+
+def _retention_popup(current: str) -> NSPopUpButton:
+    popup = NSPopUpButton.alloc().init()
+    options = ["1w", "1m", "3m", "6m", "1y", "Forever"]
+    popup.addItemsWithTitles_(options)
+    if current in options:
+        popup.selectItemWithTitle_(current)
+    return popup
+
+
+def _add_width_constraint(view, min_width: float):
+    constraint = NSLayoutConstraint.constraintWithItem_attribute_relatedBy_toItem_attribute_multiplier_constant_(
+        view,
+        NSLayoutAttributeWidth,
+        NSLayoutRelationGreaterThanOrEqual,
+        None,
+        NSLayoutAttributeWidth,
+        1.0,
+        min_width,
+    )
+    view.addConstraint_(constraint)
+
+
+def show_settings_panel():
+    settings = load_settings()
+    size_bytes = _folder_size(appdata_folder)
+    size_str = _format_size(size_bytes)
+
+    alert = NSAlert.alloc().init()
+    alert.setMessageText_("OpenRecall Settings")
+    alert.setInformativeText_("Configure capture and retention in one place.")
+
+    stack = NSStackView.alloc().init()
+    stack.setOrientation_(1)  # vertical
+    stack.setSpacing_(8)
+    stack.setTranslatesAutoresizingMaskIntoConstraints_(True)
+    stack.setFrameSize_((440, 320))
+
+    # Disk usage
+    stack.addArrangedSubview_(_label(f"Current Disk Space Used: {size_str}", bold=True))
+    stack.addArrangedSubview_(
+        _label(
+            "Retention affects how long recordings are kept. Shorter retention saves space.",
+            bold=False,
+            size=12.0,
+        )
+    )
+
+    # Retention
+    stack.addArrangedSubview_(_label("Retention Period:", bold=True))
+    retention_popup = _retention_popup(settings.retention)
+    _add_width_constraint(retention_popup, 240)
+    stack.addArrangedSubview_(retention_popup)
+
+    # Startup toggle
+    startup_cb = _checkbox("Open at Startup", settings.startup_enabled)
+    stack.addArrangedSubview_(startup_cb)
+
+    # Incognito toggle
+    incognito_cb = _checkbox(
+        "Do not record Incognito/Private windows (Chrome/Firefox/Safari)",
+        settings.incognito_block,
+    )
+    stack.addArrangedSubview_(incognito_cb)
+
+    # Delete note
+    stack.addArrangedSubview_(_label("Delete all data will remove screenshots and the database.", bold=False, size=12.0))
+
+    stack.setAutoresizingMask_(18)  # flexible width/height
+    alert.setAccessoryView_(stack)
+
+    alert.addButtonWithTitle_("Delete All Data")
+    alert.addButtonWithTitle_("Save")
+
+    response = alert.runModal()
+
+    if response == NSAlertSecondButtonReturn:
+        # Delete
+        confirm = NSAlert.alloc().init()
+        confirm.setMessageText_("Delete all data?")
+        confirm.setInformativeText_("This will remove all recordings and database. This cannot be undone.")
+        confirm.addButtonWithTitle_("Delete")
+        confirm.addButtonWithTitle_("Cancel")
+        res = confirm.runModal()
+        if res == NSAlertFirstButtonReturn:
+            _delete_all_data()
+        return
+
+    if response != NSAlertFirstButtonReturn:
+        return
+
+    # Save settings
+    settings.startup_enabled = bool(startup_cb.state())
+    settings.retention = retention_popup.titleOfSelectedItem()
+    settings.incognito_block = bool(incognito_cb.state())
+    save_settings(settings)
+
+
+def present_settings_panel():
+    """Ensure the settings panel is shown on the main thread."""
+    if threading.current_thread() is threading.main_thread():
+        show_settings_panel()
+    else:
+        # Schedule on main thread using PyObjC helper
+        AppHelper.callAfter(show_settings_panel)
