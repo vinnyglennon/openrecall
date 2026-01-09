@@ -1,3 +1,4 @@
+import os
 from threading import Thread, Event
 from pathlib import Path
 from datetime import datetime
@@ -5,17 +6,29 @@ import logging
 import numpy as np
 from flask import Flask, render_template_string, request, send_from_directory
 from jinja2 import BaseLoader
-from rich.logging import RichHandler
-from rich.traceback import install as rich_traceback_install
+from dotenv import load_dotenv
+import sentry_sdk
+from sentry_sdk.integrations.logging import LoggingIntegration
 
-# Enable rich tracebacks and logging formatting early
-rich_traceback_install(show_locals=False)
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(message)s",
-    datefmt="[%X]",
-    handlers=[RichHandler(rich_tracebacks=True)],
+# Trim optional heavy deps that crash in frozen builds (torchvision)
+os.environ.setdefault("TRANSFORMERS_NO_TORCHVISION", "1")
+os.environ.setdefault("TRANSFORMERS_NO_TF", "1")
+os.environ.setdefault("TRANSFORMERS_NO_FLAX", "1")
+
+# Load environment variables from .env if present
+load_dotenv()
+
+# Sentry setup (DSN via .env SENTRY_DSN)
+sentry_sdk.init(
+    dsn=os.getenv("SENTRY_DSN"),
+    integrations=[LoggingIntegration(level=logging.INFO, event_level=logging.ERROR)],
+    traces_sample_rate=float(os.getenv("SENTRY_TRACES_SAMPLE_RATE", "0")),
+    profiles_sample_rate=float(os.getenv("SENTRY_PROFILES_SAMPLE_RATE", "0")),
+    send_default_pii=False,
 )
+
+# Enable standard logging early
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
 from openrecall.config import appdata_folder, screenshots_path
 from openrecall.database import (

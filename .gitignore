@@ -9,3 +9,4 @@ build
 .venv
 dev.md
 .env
+.mypy_cache

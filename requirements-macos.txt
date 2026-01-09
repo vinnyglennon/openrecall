@@ -11,6 +11,6 @@ rapidfuzz==3.14.3
 Pillow==12.1.0
 pystray==0.19.5
 pyobjc==12.1
-py2app==0.28.9
 python-doctr
-rich==13.9.4
+python-dotenv==1.0.1
+sentry-sdk==2.19.2
