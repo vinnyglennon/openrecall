@@ -12,9 +12,5 @@ Pillow==12.1.0
 pystray==0.19.5
 pyobjc==12.1
 py2app==0.28.9
-python-doctr==1.0.0
-pytest==9.0.2
-ruff==0.14.11
-black==25.12.0
-mypy==1.19.1
+python-doctr
 rich==13.9.4
