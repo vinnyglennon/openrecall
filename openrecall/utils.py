@@ -71,7 +71,7 @@ def timestamp_to_human_readable(timestamp: int) -> str:
     try:
         dt_object = datetime.datetime.fromtimestamp(timestamp)
         return dt_object.strftime("%Y-%m-%d %H:%M:%S")
-    except:
+    except Exception:
         return ""
 
 
@@ -88,7 +88,7 @@ def get_active_app_name_osx() -> str:
     try:
         active_app = NSWorkspace.sharedWorkspace().activeApplication()
         return active_app.get("NSApplicationName", "")
-    except:
+    except Exception:
         return ""
 
 
@@ -147,7 +147,7 @@ def get_active_app_name_windows() -> str:
             return ""
         exe = psutil.Process(pid).name()
         return exe
-    except:
+    except Exception:
         return ""
 
 

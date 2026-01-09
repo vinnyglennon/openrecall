@@ -10,12 +10,12 @@ from importlib.metadata import PackageNotFoundError, version as pkg_version
 import pystray
 from PIL import Image
 
-logger = logging.getLogger(__name__)
-
 from openrecall.config import appdata_folder
-from openrecall.settings import load_settings, save_settings, Settings
+from openrecall.settings import load_settings, save_settings
 from openrecall.database import create_db
 from openrecall.config import screenshots_path
+
+logger = logging.getLogger(__name__)
 
 present_settings_panel = None
 if platform.system().lower() == "darwin":
@@ -173,7 +173,6 @@ def _escape_item(item: str) -> str:
 
 
 def _macos_settings_flow():
-    from openrecall.config import appdata_folder
 
     settings = load_settings()
 

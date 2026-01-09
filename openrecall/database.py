@@ -1,7 +1,7 @@
 import sqlite3
 from collections import namedtuple
 import numpy as np
-from typing import Any, List, Optional, Tuple
+from typing import List, Optional
 
 from openrecall.config import db_path
 

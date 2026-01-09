@@ -22,7 +22,6 @@ with patch('openrecall.config.db_path', mock_db_path):
         insert_entry,
         get_all_entries,
         get_timestamps,
-        Entry,
     )
     # Also patch db_path within the database module itself if it was imported directly there
     import openrecall.database

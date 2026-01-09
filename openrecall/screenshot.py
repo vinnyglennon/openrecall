@@ -1,7 +1,7 @@
 import os
 import time
 import threading
-from typing import List, Tuple
+from typing import List
 
 import mss
 import numpy as np

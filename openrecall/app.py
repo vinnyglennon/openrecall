@@ -14,7 +14,7 @@ from openrecall.database import (
 )
 from openrecall.nlp import cosine_similarity, get_embedding
 from openrecall.screenshot import record_screenshots_thread
-from openrecall.trayapp import start_tray_icon_async, start_tray_icon_blocking
+from openrecall.trayapp import start_tray_icon_blocking
 from openrecall.utils import human_readable_time, timestamp_to_human_readable
 
 app = Flask(__name__)

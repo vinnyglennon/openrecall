@@ -149,3 +149,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh  # installs uv
 uv venv
 source .venv/bin/activate
 uv pip install ".[dev]"
+
+
+
+
+Ruff:
+ruff check . --fix
