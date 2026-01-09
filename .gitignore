@@ -1,5 +1,4 @@
 __pycache__
-venv
 *.db
 *.egg-info
 dist
@@ -7,3 +6,4 @@ build
 .pytest_cache
 .vscode
 .aider*
+.venv

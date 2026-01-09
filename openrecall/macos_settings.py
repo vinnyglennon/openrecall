@@ -1,6 +1,9 @@
 import os
+import sys
 import time
 import threading
+import plistlib
+import subprocess
 from typing import Tuple
 
 import objc
@@ -24,6 +27,9 @@ from openrecall.settings import load_settings, save_settings
 from openrecall.config import appdata_folder, screenshots_path
 from openrecall.database import create_db
 from openrecall.screenshot import RETENTION_SECONDS
+
+LAUNCH_AGENT_ID = "com.openrecall.app"
+LAUNCH_AGENT_PATH = os.path.expanduser(f"~/Library/LaunchAgents/{LAUNCH_AGENT_ID}.plist")
 
 
 def _format_size(bytes_size: int) -> str:
@@ -110,6 +116,38 @@ def _add_width_constraint(view, min_width: float):
     view.addConstraint_(constraint)
 
 
+def _set_login_item(enabled: bool):
+    os.makedirs(os.path.dirname(LAUNCH_AGENT_PATH), exist_ok=True)
+    if enabled:
+        plist = {
+            "Label": LAUNCH_AGENT_ID,
+            "ProgramArguments": [sys.executable, "-m", "openrecall.app"],
+            "RunAtLoad": True,
+            "KeepAlive": False,
+            "StandardOutPath": os.path.expanduser("~/Library/Logs/openrecall.log"),
+            "StandardErrorPath": os.path.expanduser("~/Library/Logs/openrecall.log"),
+            "WorkingDirectory": os.path.expanduser("~"),
+        }
+        with open(LAUNCH_AGENT_PATH, "wb") as f:
+            plistlib.dump(plist, f)
+    else:
+        try:
+            os.remove(LAUNCH_AGENT_PATH)
+        except FileNotFoundError:
+            pass
+        except OSError:
+            pass
+
+
+def _get_running_apps() -> list[str]:
+    try:
+        output = subprocess.check_output(["ps", "-axo", "comm"], text=True)
+        apps = sorted({line.strip().split("/")[-1] for line in output.splitlines() if line.strip()})
+        return apps[:50]
+    except Exception:
+        return []
+
+
 def show_settings_panel():
     settings = load_settings()
     size_bytes = _folder_size(appdata_folder)
@@ -152,6 +190,17 @@ def show_settings_panel():
     )
     stack.addArrangedSubview_(incognito_cb)
 
+    # Exclude apps (comma-separated)
+    stack.addArrangedSubview_(_label("Exclude apps (comma-separated):", bold=True))
+    exclude_field = NSTextField.alloc().init()
+    exclude_field.setStringValue_(", ".join(settings.whitelist or []))
+    _add_width_constraint(exclude_field, 320)
+    stack.addArrangedSubview_(exclude_field)
+
+    running = _get_running_apps()
+    if running:
+        stack.addArrangedSubview_(_label("Running apps (for reference): " + ", ".join(running[:10]), bold=False, size=11.0))
+
     # Delete note
     stack.addArrangedSubview_(_label("Delete all data will remove screenshots and the database.", bold=False, size=12.0))
 
@@ -159,7 +208,11 @@ def show_settings_panel():
     alert.setAccessoryView_(stack)
 
     alert.addButtonWithTitle_("Delete All Data")
+<<<<<<< /Users/vinnyglennon/src/openrecall/openrecall/macos_settings.py
     alert.addButtonWithTitle_("Save")
+=======
+    alert.addButtonWithTitle_("Cancel")
+>>>>>>> /Users/vinnyglennon/.windsurf/worktrees/openrecall/openrecall-9a9d8e47/openrecall/macos_settings.py
 
     response = alert.runModal()
 
@@ -182,6 +235,18 @@ def show_settings_panel():
     settings.startup_enabled = bool(startup_cb.state())
     settings.retention = retention_popup.titleOfSelectedItem()
     settings.incognito_block = bool(incognito_cb.state())
+    raw_excludes = exclude_field.stringValue().strip()
+    if raw_excludes:
+        settings.whitelist = [item.strip() for item in raw_excludes.split(",") if item.strip()]
+    else:
+        settings.whitelist = []
+
+    # Apply side effects
+    try:
+        _set_login_item(settings.startup_enabled)
+    except Exception:
+        pass
+
     save_settings(settings)
 
 

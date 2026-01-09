@@ -6,17 +6,6 @@ import platform
 import webbrowser
 from typing import Optional
 
-try:
-    import tkinter as tk
-    from tkinter import messagebox, ttk
-
-    TK_AVAILABLE = True
-except ImportError:
-    tk = None
-    messagebox = None
-    ttk = None
-    TK_AVAILABLE = False
-
 from importlib.metadata import PackageNotFoundError, version as pkg_version
 import pystray
 from PIL import Image
@@ -61,7 +50,6 @@ def _quit(icon: pystray.Icon, _item=None):
 
 _tray_icon: Optional[pystray.Icon] = None
 _menu_lock = threading.Lock()
-_settings_window: Optional["tk.Tk"] = None  # type: ignore[name-defined]
 
 
 def _get_version() -> str:
@@ -167,32 +155,6 @@ def _get_running_apps() -> list[str]:
         return []
 
 
-def _delete_all_data():
-    from openrecall.config import appdata_folder
-
-    if not TK_AVAILABLE:
-        logger.warning("Tk not available; cannot open confirmation dialog.")
-        return
-
-    if not messagebox.askyesno("Confirm deletion", "Delete all data in the application folder? This cannot be undone."):
-        return
-    try:
-        for root, dirs, files in os.walk(appdata_folder, topdown=False):
-            for f in files:
-                try:
-                    os.remove(os.path.join(root, f))
-                except OSError:
-                    pass
-            for d in dirs:
-                try:
-                    os.rmdir(os.path.join(root, d))
-                except OSError:
-                    pass
-        messagebox.showinfo("Deletion complete", "All data has been removed from the application folder.")
-    except Exception as exc:
-        messagebox.showerror("Deletion failed", f"Could not delete data: {exc}")
-
-
 def _osascript(script: str) -> str:
     try:
         out = subprocess.check_output(["osascript", "-e", script], text=True)
@@ -268,7 +230,6 @@ def _macos_settings_flow():
     )
     deleted = False
     if delete_choice and "button returned:Delete" in delete_choice:
-        # On macOS without Tk, perform deletion quietly
         try:
             # Delete files but leave the top-level folder so app can recreate structure
             for root, dirs, files in os.walk(appdata_folder, topdown=False):
@@ -304,7 +265,6 @@ def _macos_settings_flow():
 
 
 def _open_settings(icon=None, item=None):
-    # Prefer per-platform native flows without Tk/webview
     if platform.system().lower() == "darwin" and present_settings_panel:
         try:
             present_settings_panel()
@@ -315,7 +275,7 @@ def _open_settings(icon=None, item=None):
         logger.warning("macOS settings panel not available (PyObjC not installed or import failed).")
 
     # Fallback for other platforms: simple message
-    logger.warning("Settings UI not implemented for this platform without Tk/webview.")
+    logger.warning("Settings UI not implemented for this platform yet.")
 
 
 def start_tray_icon_async():

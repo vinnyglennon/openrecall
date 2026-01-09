@@ -131,7 +131,7 @@ uv pip install ".[dev]"
 To run:
 
 ```bash
-python3 -m openrecall.app
+uv run python -m openrecall.app
 ```
 
 Open your browser to:
@@ -140,7 +140,7 @@ Open your browser to:
 Run Tests:
 
 ```bash
-python3 -m pytest tests
+uv run python -m pytest
 ```
 
 
